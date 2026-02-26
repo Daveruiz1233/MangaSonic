@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
+import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
+import 'package:manga_sonic/utils/download_manager.dart';
 
 class MangaScreen extends StatefulWidget {
   final String mangaTitle;
@@ -113,7 +115,37 @@ class _MangaScreenState extends State<MangaScreen> {
                 final chapter = _chapters[index];
                 return ListTile(
                   title: Text(chapter.title),
-                  trailing: const Icon(Icons.download),
+                  trailing: DownloadDB.isDownloaded(chapter.url) 
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : IconButton(
+                          icon: const Icon(Icons.download),
+                          onPressed: () async {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Downloading ${chapter.title}...'))
+                            );
+                            try {
+                              await DownloadManager.downloadChapter(
+                                chapterUrl: chapter.url,
+                                chapterTitle: chapter.title,
+                                mangaTitle: widget.mangaTitle,
+                                mangaUrl: widget.mangaUrl,
+                                sourceId: widget.sourceId,
+                              );
+                              setState(() {}); // refresh to show check icon
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Download Complete!'))
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e'))
+                                );
+                              }
+                            }
+                          },
+                        ),
                   onTap: () {
                     Navigator.push(
                       context,
