@@ -85,13 +85,13 @@ class AsuraComicParser extends BaseParser {
     final response = await getRequest(mangaUrl);
     final document = parser.parse(response.body);
     
-    final chapterElements = document.querySelectorAll('a[href*="/chapter/"], a[href*="/ch-"], .eph-num a, .chbox, .chplist a, #chapterlist a, .wp-manga-chapter a');
+    final chapterElements = document.querySelectorAll('main a[href*="/chapter/"], .chapter-list a, .eph-num a, .chbox, .chplist a, #chapterlist a, .wp-manga-chapter a');
     
     List<Chapter> chapters = [];
     for (var element in chapterElements) {
-      if (element.parent != null && !element.parent!.className.contains('pl-4')) continue;
-      
+      // Removed the narrow pl-4 filter as it might be filtering out real chapters on the new site layout
       final href = element.attributes['href'] ?? '';
+      if (href.isEmpty) continue;
       
       String url = '';
       if (href.startsWith('http')) {
@@ -101,6 +101,10 @@ class AsuraComicParser extends BaseParser {
          if (!relative.startsWith('series/')) relative = 'series/' + relative;
          url = '$baseUrl/$relative';
       }
+
+      // Filter: Ensure the URL belongs to this manga and contains "/chapter/"
+      final mangaSlug = mangaUrl.split('/').lastWhere((s) => s.isNotEmpty);
+      if (!url.contains(mangaSlug) || !url.contains('/chapter/')) continue;
 
       final title = element.text.trim().replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
       

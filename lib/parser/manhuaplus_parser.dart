@@ -62,12 +62,12 @@ class ManhuaPlusParser extends BaseParser {
       final idTag = document.querySelector('#manga-chapters-holder');
       final mangaId = idTag?.attributes['data-id'];
       if (mangaId != null) {
-         response = await client.post(
-           Uri.parse('$baseUrl/wp-admin/admin-ajax.php'),
-           body: { 'action': 'manga_get_chapters', 'manga': mangaId }
-         );
-         document = parser.parse(response.body);
-         chapterElements = document.querySelectorAll('.wp-manga-chapter a');
+        response = await postRequest(
+          '$baseUrl/wp-admin/admin-ajax.php',
+          body: { 'action': 'manga_get_chapters', 'manga': mangaId }
+        );
+        document = parser.parse(response.body);
+        chapterElements = document.querySelectorAll('.wp-manga-chapter a');
       }
     }
 

@@ -20,6 +20,10 @@ class _SiteScreenState extends State<SiteScreen> {
   bool _isLoading = true;
   int _currentPage = 1;
   final ScrollController _scrollController = ScrollController();
+  
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -37,7 +41,14 @@ class _SiteScreenState extends State<SiteScreen> {
     setState(() => _isLoading = true);
     try {
       final parser = getParserForSite(widget.siteName);
-      final newMangas = await parser.fetchMangaList(_currentPage);
+      List<Manga> newMangas;
+      
+      if (_isSearching && _searchQuery.isNotEmpty) {
+        newMangas = await parser.searchManga(_searchQuery, _currentPage);
+      } else {
+        newMangas = await parser.fetchMangaList(_currentPage);
+      }
+
       setState(() {
         _mangas.addAll(newMangas);
         _isLoading = false;
@@ -64,7 +75,45 @@ class _SiteScreenState extends State<SiteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.siteName),
+        title: _isSearching 
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search manga...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.white54),
+                ),
+                style: const TextStyle(color: Colors.white),
+                onSubmitted: (value) {
+                  setState(() {
+                    _searchQuery = value.trim();
+                    _mangas.clear();
+                    _currentPage = 1;
+                  });
+                  _fetchData();
+                },
+              )
+            : Text(widget.siteName),
+        actions: [
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _isSearching = false;
+                  _searchController.clear();
+                  _searchQuery = '';
+                  _mangas.clear();
+                  _currentPage = 1;
+                  _fetchData();
+                } else {
+                  _isSearching = true;
+                }
+              });
+            },
+          )
+        ],
       ),
       body: _mangas.isEmpty && _isLoading
           ? const Center(child: CircularProgressIndicator())

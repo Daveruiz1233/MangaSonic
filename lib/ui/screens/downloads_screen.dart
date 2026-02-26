@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
+import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 
@@ -50,13 +51,18 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     onPressed: () => _deleteDownload(d.chapterUrl),
                   ),
                   onTap: () {
+                    final chapter = Chapter(
+                      title: d.chapterTitle,
+                      url: d.chapterUrl,
+                      mangaUrl: d.mangaUrl,
+                    );
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ChapterReaderScreen(
-                          chapterTitle: d.chapterTitle,
-                          chapterUrl: d.chapterUrl,
-                          sourceId: '', // offline won't use parser anyway
+                          allChapters: [chapter],
+                          initialIndex: 0,
+                          sourceId: 'offline', // Won't be used for downloads
                         ),
                       ),
                     );

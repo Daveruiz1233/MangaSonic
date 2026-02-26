@@ -32,7 +32,23 @@ abstract class BaseParser {
     );
     
     if (response.statusCode == 403 || response.statusCode == 429) {
-      throw Exception('Cloudflare block detected (Status \${response.statusCode})');
+      throw Exception('Cloudflare block detected (Status ${response.statusCode})');
+    }
+    
+    return response;
+  }
+
+  Future<http.Response> postRequest(String url, {Object? body}) async {
+    final response = await client.post(
+      Uri.parse(url),
+      headers: {
+        ...CloudflareInterceptor.headers,
+      },
+      body: body,
+    );
+    
+    if (response.statusCode == 403 || response.statusCode == 429) {
+      throw Exception('Cloudflare block detected (Status ${response.statusCode})');
     }
     
     return response;
