@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
+import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
 
 class SiteScreen extends StatefulWidget {
   final String siteName;
@@ -42,6 +43,16 @@ class _SiteScreenState extends State<SiteScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (e.toString().contains('403') || e.toString().contains('Cloudflare')) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('Passing Cloudflare... Please wait.'))
+           );
+        }
+        await CloudflareInterceptor.bypass(widget.siteUrl);
+        // Retry once
+        return _fetchData();
+      }
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

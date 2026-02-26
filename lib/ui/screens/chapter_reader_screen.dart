@@ -87,11 +87,13 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
               itemCount: _isOffline ? _offlineImages.length : _onlineImages.length,
+              cacheExtent: 3000, // Preload ~3-5 images ahead
               itemBuilder: (context, index) {
                 if (_isOffline) {
                   return Image.file(
                     _offlineImages[index],
                     fit: BoxFit.contain,
+                    cacheWidth: 1200, // Memory constraint: decode to 1200px max
                     errorBuilder: (context, error, stackTrace) => Container(
                       height: 400,
                       color: Colors.grey[900],
@@ -102,10 +104,16 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                   return CachedNetworkImage(
                     imageUrl: _onlineImages[index],
                     fit: BoxFit.contain,
+                    memCacheWidth: 1200, // Memory constraint: decode to 1200px max
                     placeholder: (context, url) => Container(
                       height: 400,
                       color: Colors.grey[900],
-                      child: const Center(child: CircularProgressIndicator()),
+                      child: Center(
+                        child: Text(
+                          'Page ${index + 1}',
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                      ),
                     ),
                     errorWidget: (context, url, error) => Container(
                       height: 400,

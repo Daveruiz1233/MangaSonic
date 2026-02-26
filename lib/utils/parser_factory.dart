@@ -4,12 +4,15 @@ import 'package:manga_sonic/parser/asuracomic_parser.dart';
 import 'package:manga_sonic/parser/manhuaplus_parser.dart';
 
 BaseParser getParserForSite(String siteName) {
-  switch (siteName) {
-    case 'ManhuaTop':
+  final normalized = siteName.toLowerCase().replaceAll(' ', '').replaceAll('-', '');
+  switch (normalized) {
+    case 'manhuatop':
       return ManhuaTopParser();
-    case 'AsuraComic':
+    case 'asuracomic':
+    case 'asurascan':
+    case 'asurascans':
       return AsuraComicParser();
-    case 'ManhuaPlus':
+    case 'manhuaplus':
       return ManhuaPlusParser();
     default:
       throw Exception('Parser for site $siteName not implemented');

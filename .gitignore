@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+.local-chrome/
+*.html
+parse_debug.dart
+test_all.dart
+test_raw.dart
