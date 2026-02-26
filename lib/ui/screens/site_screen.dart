@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
+import 'package:manga_sonic/data/models/models.dart';
+import 'package:manga_sonic/utils/parser_factory.dart';
 
 class SiteScreen extends StatefulWidget {
   final String siteName;
@@ -12,8 +15,39 @@ class SiteScreen extends StatefulWidget {
 }
 
 class _SiteScreenState extends State<SiteScreen> {
-  // We will load manga logic here later
-  bool _isLoading = false;
+  final List<Manga> _mangas = [];
+  bool _isLoading = true;
+  int _currentPage = 1;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 500 && !_isLoading) {
+        _currentPage++;
+        _fetchData();
+      }
+    });
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final parser = getParserForSite(widget.siteName);
+      final newMangas = await parser.fetchMangaList(_currentPage);
+      setState(() {
+        _mangas.addAll(newMangas);
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +55,10 @@ class _SiteScreenState extends State<SiteScreen> {
       appBar: AppBar(
         title: Text(widget.siteName),
       ),
-      body: _isLoading
+      body: _mangas.isEmpty && _isLoading
           ? const Center(child: CircularProgressIndicator())
           : GridView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(8.0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
@@ -31,17 +66,22 @@ class _SiteScreenState extends State<SiteScreen> {
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
               ),
-              itemCount: 9, // Fake items for now
+              itemCount: _mangas.length + (_isLoading ? 3 : 0),
               itemBuilder: (context, index) {
+                if (index >= _mangas.length) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final manga = _mangas[index];
                 return GestureDetector(
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => MangaScreen(
-                          mangaTitle: 'Manga $index',
-                          mangaUrl: '/dummy/path/$index',
-                          coverUrl: '',
+                          mangaTitle: manga.title,
+                          mangaUrl: manga.url,
+                          coverUrl: manga.coverUrl,
+                          sourceId: manga.sourceId,
                         ),
                       ),
                     );
@@ -53,15 +93,18 @@ class _SiteScreenState extends State<SiteScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: Container(
-                            color: Colors.deepPurple[800],
-                            child: const Center(child: Icon(Icons.image)),
+                          child: CachedNetworkImage(
+                            imageUrl: manga.coverUrl,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 300, 
+                            placeholder: (context, url) => Container(color: Colors.deepPurple[800]),
+                            errorWidget: (context, url, error) => const Icon(Icons.error),
                           ),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(4.0),
                           child: Text(
-                            'Manga Title $index',
+                            manga.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 12),
@@ -76,3 +119,4 @@ class _SiteScreenState extends State<SiteScreen> {
     );
   }
 }
+
