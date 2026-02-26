@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
 import 'package:manga_sonic/data/models/models.dart';
+import 'package:manga_sonic/data/db/library_db.dart';
+import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 
 class MangaScreen extends StatefulWidget {
@@ -24,10 +26,12 @@ class MangaScreen extends StatefulWidget {
 class _MangaScreenState extends State<MangaScreen> {
   bool _isLoading = true;
   List<Chapter> _chapters = [];
+  bool _isSaved = false;
 
   @override
   void initState() {
     super.initState();
+    _isSaved = LibraryDB.isSaved(widget.mangaUrl);
     _fetchChapters();
   }
 
@@ -54,9 +58,49 @@ class _MangaScreenState extends State<MangaScreen> {
         title: Text(widget.mangaTitle),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bookmark_add_outlined),
-            onPressed: () {
-              // Show dialog to add to category
+            icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_add_outlined),
+            onPressed: () async {
+              if (_isSaved) {
+                await LibraryDB.removeItem(widget.mangaUrl);
+                setState(() => _isSaved = false);
+              } else {
+                final categories = LibraryDB.getCategories();
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text('Add to Category'),
+                      content: SizedBox(
+                        width: double.maxFinite,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final cat = categories[index];
+                            return ListTile(
+                              title: Text(cat.name),
+                              onTap: () async {
+                                final item = LibraryItem(
+                                  mangaUrl: widget.mangaUrl,
+                                  title: widget.mangaTitle,
+                                  coverUrl: widget.coverUrl,
+                                  sourceId: widget.sourceId,
+                                  categoryId: cat.id,
+                                );
+                                await LibraryDB.saveItem(item);
+                                if (mounted) {
+                                  Navigator.pop(context);
+                                  setState(() => _isSaved = true);
+                                }
+                              }
+                            );
+                          }
+                        )
+                      )
+                    );
+                  }
+                );
+              }
             },
           )
         ],
