@@ -9,7 +9,7 @@ class SiteScreen extends StatefulWidget {
   final String siteName;
   final String siteUrl;
 
-  const SiteScreen({Key? key, required this.siteName, required this.siteUrl}) : super(key: key);
+  const SiteScreen({super.key, required this.siteName, required this.siteUrl});
 
   @override
   State<SiteScreen> createState() => _SiteScreenState();

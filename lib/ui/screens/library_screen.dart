@@ -5,7 +5,7 @@ import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({Key? key}) : super(key: key);
+  const LibraryScreen({super.key});
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -15,6 +15,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late List<LibraryCategory> _categories;
   late List<LibraryItem> _items;
   String _selectedCategoryId = 'default';
+  
+  // Selection state
+  bool _isSelectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  // Search state
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -30,6 +38,50 @@ class _LibraryScreenState extends State<LibraryScreen> {
         _selectedCategoryId = _categories.first.id;
       }
     });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedIds.add(id);
+        _isSelectionMode = true;
+      }
+    });
+  }
+
+  void _deleteSelected() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Selected?'),
+        content: Text('Remove ${_selectedIds.length} items from library?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              for (final id in _selectedIds) {
+                await LibraryDB.removeItem(id);
+              }
+              _selectedIds.clear();
+              _loadData();
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      )
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _addCategoryDialog() {
@@ -53,7 +105,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   await LibraryDB.addCategory(LibraryCategory(id: id, name: name));
                   _loadData();
                 }
-                if (mounted) Navigator.pop(context);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
               child: const Text('Add'),
             ),
@@ -65,16 +119,76 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentItems = _items.where((i) => i.categoryId == _selectedCategoryId).toList();
+    final searchQuery = _searchController.text.toLowerCase();
+    final currentItems = _items.where((i) {
+      final matchesCategory = i.categoryId == _selectedCategoryId;
+      final matchesSearch = i.title.toLowerCase().contains(searchQuery);
+      return matchesCategory && matchesSearch;
+    }).toList();
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Library'),
-        actions: [
+        leading: _isSearching
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  setState(() {
+                    _isSearching = false;
+                    _searchController.clear();
+                  });
+                },
+              )
+            : null,
+        title: _isSelectionMode 
+          ? Text('${_selectedIds.length} Selected') 
+          : _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Search library...',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(color: Colors.white54),
+                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                  onChanged: (_) => setState(() {}),
+                )
+              : const Text('Library', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: _isSelectionMode ? [
           IconButton(
-            icon: const Icon(Icons.create_new_folder),
-            onPressed: _addCategoryDialog,
-          )
+            icon: const Icon(Icons.delete_outline),
+            onPressed: _deleteSelected,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => setState(() {
+              _isSelectionMode = false;
+              _selectedIds.clear();
+            }),
+          ),
+        ] : [
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _isSearching = true),
+            ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {},
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'add_category') _addCategoryDialog();
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'add_category',
+                child: Text('Add Category'),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -88,37 +202,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 final cat = _categories[index];
                 final isSelected = cat.id == _selectedCategoryId;
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedCategoryId = cat.id),
-                  onLongPress: () {
-                    if (cat.id == 'default') return;
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Category?'),
-                        content: Text('Delete ${cat.name} and all its manga?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                          TextButton(
-                            onPressed: () async {
-                              await LibraryDB.deleteCategory(cat.id);
-                              _loadData();
-                              if (mounted) Navigator.pop(context);
-                            },
-                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                          ),
-                        ],
-                      )
-                    );
+                  onTap: () {
+                    if (_isSelectionMode) return;
+                    setState(() => _selectedCategoryId = cat.id);
                   },
                   child: Container(
                     alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.deepPurple : Colors.grey[800],
-                      borderRadius: BorderRadius.circular(16),
+                      color: isSelected ? theme.primaryColor.withValues(alpha: 0.2) : Colors.grey[850],
+                      borderRadius: BorderRadius.circular(20),
+                      border: isSelected ? Border.all(color: theme.primaryColor, width: 1) : Border.all(color: Colors.transparent, width: 1),
                     ),
-                    child: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(
+                      cat.name, 
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? theme.primaryColor : Colors.white70,
+                      ),
+                    ),
                   ),
                 );
               },
@@ -136,46 +239,73 @@ class _LibraryScreenState extends State<LibraryScreen> {
               itemCount: currentItems.length,
               itemBuilder: (context, index) {
                 final item = currentItems[index];
+                final isSelected = _selectedIds.contains(item.mangaUrl);
+                
                 return GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => MangaScreen(
-                          mangaTitle: item.title,
-                          mangaUrl: item.mangaUrl,
-                          coverUrl: item.coverUrl,
-                          sourceId: item.sourceId,
+                    if (_isSelectionMode) {
+                      _toggleSelection(item.mangaUrl);
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MangaScreen(
+                            mangaTitle: item.title,
+                            mangaUrl: item.mangaUrl,
+                            coverUrl: item.coverUrl,
+                            sourceId: item.sourceId,
+                          ),
+                        ),
+                      ).then((value) => _loadData());
+                    }
+                  },
+                  onLongPress: () => _toggleSelection(item.mangaUrl),
+                  child: Stack(
+                    children: [
+                      Card(
+                        color: Colors.grey[900],
+                        clipBehavior: Clip.antiAlias,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: isSelected 
+                            ? BorderSide(color: theme.primaryColor, width: 3)
+                            : BorderSide.none,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: CachedNetworkImage(
+                                imageUrl: item.coverUrl,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 300,
+                                placeholder: (context, url) => Container(color: theme.primaryColor.withValues(alpha: 0.3)),
+                                errorWidget: (context, url, error) => const Icon(Icons.error),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ).then((value) => _loadData()); // Reload when coming back
-                  },
-                  child: Card(
-                    color: Colors.grey[900],
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: CachedNetworkImage(
-                            imageUrl: item.coverUrl,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 300,
-                            placeholder: (context, url) => Container(color: Colors.deepPurple[800]),
-                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                      if (isSelected)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundColor: theme.primaryColor,
+                            child: const Icon(Icons.check, size: 16, color: Colors.white),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Text(
-                            item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 );
               },

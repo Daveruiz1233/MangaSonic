@@ -14,7 +14,10 @@ abstract class BaseParser {
   // Search
   Future<List<Manga>> searchManga(String query, int page);
 
-  // Fetch manga details (chapters)
+  // Fetch manga details (description, status, etc.)
+  Future<MangaDetails> fetchMangaDetails(Manga manga);
+
+  // Fetch chapters
   Future<List<Chapter>> fetchChapters(String mangaUrl);
 
   // Fetch chapter images
@@ -38,11 +41,12 @@ abstract class BaseParser {
     return response;
   }
 
-  Future<http.Response> postRequest(String url, {Object? body}) async {
+  Future<http.Response> postRequest(String url, {Object? body, Map<String, String>? headers}) async {
     final response = await client.post(
       Uri.parse(url),
       headers: {
         ...CloudflareInterceptor.headers,
+        if (headers != null) ...headers,
       },
       body: body,
     );

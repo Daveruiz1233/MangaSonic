@@ -5,6 +5,9 @@ class DownloadedChapter {
   final String chapterTitle;
   final String mangaTitle;
   final String mangaUrl;
+  final String coverUrl;
+  final String author;
+  final List<String> genres;
   final String directoryPath;
   final int imageCount;
 
@@ -13,6 +16,9 @@ class DownloadedChapter {
     required this.chapterTitle,
     required this.mangaTitle,
     required this.mangaUrl,
+    required this.coverUrl,
+    required this.author,
+    required this.genres,
     required this.directoryPath,
     required this.imageCount,
   });
@@ -22,6 +28,9 @@ class DownloadedChapter {
     'chapterTitle': chapterTitle,
     'mangaTitle': mangaTitle,
     'mangaUrl': mangaUrl,
+    'coverUrl': coverUrl,
+    'author': author,
+    'genres': genres,
     'directoryPath': directoryPath,
     'imageCount': imageCount,
   };
@@ -32,6 +41,9 @@ class DownloadedChapter {
       chapterTitle: map['chapterTitle'],
       mangaTitle: map['mangaTitle'],
       mangaUrl: map['mangaUrl'],
+      coverUrl: map['coverUrl'] ?? '',
+      author: map['author'] ?? 'Unknown',
+      genres: (map['genres'] as List?)?.cast<String>() ?? [],
       directoryPath: map['directoryPath'],
       imageCount: map['imageCount'],
     );

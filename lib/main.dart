@@ -4,7 +4,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
-
+import 'package:manga_sonic/services/theme_service.dart';
+import 'package:manga_sonic/utils/download_manager.dart';
 import 'ui/screens/home_screen.dart';
 
 void main() async {
@@ -14,11 +15,14 @@ void main() async {
   await DownloadDB.init();
   await HistoryDB.init();
   
+  final themeService = ThemeService();
+  final downloadManager = DownloadManager();
+  
   runApp(
     MultiProvider(
       providers: [
-        // App State providers will go here
-        Provider<String>(create: (_) => 'DummyProvider'),
+        ChangeNotifierProvider.value(value: themeService),
+        ChangeNotifierProvider.value(value: downloadManager),
       ],
       child: const MangaSonicApp(),
     ),
@@ -26,22 +30,19 @@ void main() async {
 }
 
 class MangaSonicApp extends StatelessWidget {
-  const MangaSonicApp({Key? key}) : super(key: key);
+  const MangaSonicApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MangaSonic',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        primaryColor: Colors.deepPurple,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E1E1E),
-          elevation: 0,
-        ),
-      ),
-      home: const HomeScreen(),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return MaterialApp(
+          title: 'MangaSonic',
+          debugShowCheckedModeBanner: false,
+          theme: themeService.themeData,
+          home: const HomeScreen(),
+        );
+      },
     );
   }
 }

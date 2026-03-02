@@ -7,11 +7,12 @@ class CloudflareInterceptor {
   static bool _hasBypassed = false;
 
   static Map<String, String> get headers {
-    return {
-      if (_userAgent != null) 'User-Agent': _userAgent!,
-      if (_cookies != null) 'Cookie': _cookies!,
+    final Map<String, String> h = {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     };
+    if (_userAgent != null) h['User-Agent'] = _userAgent!;
+    if (_cookies != null) h['Cookie'] = _cookies!;
+    return h;
   }
 
   static Future<void> bypass(String url) async {

@@ -1,5 +1,6 @@
 import 'package:html/parser.dart' as parser;
 import 'package:manga_sonic/data/models/models.dart';
+import 'package:flutter/foundation.dart';
 import 'base_parser.dart';
 
 class ManhuaTopParser extends BaseParser {
@@ -7,7 +8,7 @@ class ManhuaTopParser extends BaseParser {
 
   @override
   Future<List<Manga>> fetchMangaList(int page) async {
-    final response = await getRequest('$baseUrl/manga/?page=$page');
+    final response = await getRequest(page == 1 ? '$baseUrl/manga/' : '$baseUrl/manga/page/$page/');
     final document = parser.parse(response.body);
     final elements = document.querySelectorAll('.page-item-detail, .c-tabs-item__content, .item');
     
@@ -29,7 +30,7 @@ class ManhuaTopParser extends BaseParser {
 
   @override
   Future<List<Manga>> searchManga(String query, int page) async {
-    final response = await getRequest('$baseUrl/?s=$query&post_type=wp-manga');
+    final response = await getRequest(page == 1 ? '$baseUrl/?s=$query&post_type=wp-manga' : '$baseUrl/page/$page/?s=$query&post_type=wp-manga');
     final document = parser.parse(response.body);
     final elements = document.querySelectorAll('.c-tabs-item__content');
     
@@ -51,6 +52,20 @@ class ManhuaTopParser extends BaseParser {
   }
 
   @override
+  Future<MangaDetails> fetchMangaDetails(Manga manga) async {
+    final chapters = await fetchChapters(manga.url);
+    return MangaDetails(
+      description: 'Description not supported yet for this source.',
+      author: 'Unknown',
+      artist: 'Unknown',
+      status: 'Unknown',
+      genres: [],
+      chapters: chapters,
+      suggestions: [],
+    );
+  }
+
+  @override
   Future<List<Chapter>> fetchChapters(String mangaUrl) async {
     // Madara sites usually have a chapters list or require a POST to ajax
     // For simplicity, we try direct fetch first, and fallback to ajax
@@ -61,13 +76,31 @@ class ManhuaTopParser extends BaseParser {
     var chapterElements = document.querySelectorAll('.wp-manga-chapter a');
     
     if (chapterElements.isEmpty) {
-      // Trying the Ajax route
+      // Trying the Madara /ajax/chapters/ route (often used in newer Madara versions)
+      final ajaxUrl = mangaUrl.endsWith('/') ? '${mangaUrl}ajax/chapters/' : '$mangaUrl/ajax/chapters/';
+      try {
+        response = await postRequest(
+          ajaxUrl,
+          headers: {'X-Requested-With': 'XMLHttpRequest'},
+        );
+        if (response.statusCode == 200) {
+          document = parser.parse(response.body);
+          chapterElements = document.querySelectorAll('.wp-manga-chapter a');
+        }
+      } catch (e) {
+        debugPrint('Ajax/chapters/ failed: $e');
+      }
+    }
+
+    if (chapterElements.isEmpty) {
+      // Trying the Admin-Ajax fallback
       final idTag = document.querySelector('#manga-chapters-holder');
       final mangaId = idTag?.attributes['data-id'];
       if (mangaId != null) {
         response = await postRequest(
           '$baseUrl/wp-admin/admin-ajax.php',
-          body: { 'action': 'manga_get_chapters', 'manga': mangaId }
+          body: { 'action': 'manga_get_chapters', 'manga': mangaId },
+          headers: {'X-Requested-With': 'XMLHttpRequest'},
         );
         document = parser.parse(response.body);
         chapterElements = document.querySelectorAll('.wp-manga-chapter a');

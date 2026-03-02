@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
@@ -9,14 +10,18 @@ import 'package:manga_sonic/utils/parser_factory.dart';
 class ChapterReaderScreen extends StatefulWidget {
   final List<Chapter> allChapters;
   final int initialIndex;
+  final int initialPage;
+  final double initialOffset;
   final String sourceId;
 
   const ChapterReaderScreen({
-    Key? key,
+    super.key,
     required this.allChapters,
     required this.initialIndex,
+    this.initialPage = 0,
+    this.initialOffset = 0.0,
     required this.sourceId,
-  }) : super(key: key);
+  });
 
   @override
   State<ChapterReaderScreen> createState() => _ChapterReaderScreenState();
@@ -29,6 +34,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   
   // List of images correctly mapped to their chapter for reading progress
   final List<ReaderPage> _pages = [];
+  final Map<int, GlobalKey> _pageKeys = {};
   int _currentChapterIndex = 0;
   bool _isFetchingNext = false;
 
@@ -49,11 +55,53 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   void _onScroll() {
     if (_pages.isEmpty) return;
     
-    // Auto-mark as read logic: if we are near the end of a chapter's pages
-    // We determine current chapter by looking at the page at roughly the center/top
-    final currentOffset = _scrollController.offset;
-    // For simplicity, we mark the *last* loaded chapter as read if we are near the very bottom
-    if (_scrollController.position.pixels > _scrollController.position.maxScrollExtent - 500) {
+    // Exact Progress Tracking:
+    // We find which page is currently most visible in the viewport
+    int currentActiveIndex = -1;
+    double minTopDistance = double.infinity;
+
+    for (int i = 0; i < _pages.length; i++) {
+      final key = _pageKeys[i];
+      if (key == null) continue;
+      final context = key.currentContext;
+      if (context == null) continue;
+
+      final box = context.findRenderObject() as RenderBox;
+      final position = box.localToGlobal(Offset.zero, ancestor: context.findAncestorRenderObjectOfType<RenderObject>());
+      final top = position.dy;
+
+      // The active page is the one whose top is closest to the top of the viewport (0)
+      // or covers the top of the viewport.
+      if (top.abs() < minTopDistance) {
+        minTopDistance = top.abs();
+        currentActiveIndex = i;
+      }
+    }
+
+    if (currentActiveIndex != -1) {
+      final currentPage = _pages[currentActiveIndex];
+      
+      // Calculate offset within this page
+      final key = _pageKeys[currentActiveIndex]!;
+      final box = key.currentContext!.findRenderObject() as RenderBox;
+      final position = box.localToGlobal(Offset.zero);
+      final offsetWithinPage = position.dy.abs();
+
+      // Find relative page index within its own chapter
+      int pageIndexInChapter = 0;
+      for (int i = currentActiveIndex - 1; i >= 0; i--) {
+        if (_pages[i].chapterUrl == currentPage.chapterUrl) {
+          pageIndexInChapter++;
+        } else {
+          break;
+        }
+      }
+      
+      HistoryDB.saveProgress(currentPage.chapterUrl, pageIndexInChapter, lastPageOffset: offsetWithinPage);
+    }
+
+    // Auto-mark as read logic: if we are near the end of the total scrollable area
+    if (_scrollController.position.pixels > _scrollController.position.maxScrollExtent - 200) {
        final lastChapterUrl = _pages.last.chapterUrl;
        if (!HistoryDB.isRead(lastChapterUrl)) {
           HistoryDB.markAsRead(lastChapterUrl, isRead: true);
@@ -62,7 +110,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
     // Load next chapter logic
     if (_scrollController.position.pixels > _scrollController.position.maxScrollExtent - 2000) {
-      if (!_isFetchingNext && _currentChapterIndex > 0) { // Chapters are usually list latest-first, so "next" is index-1
+      if (!_isFetchingNext && _currentChapterIndex > 0) {
          _loadNextChapter();
       }
     }
@@ -71,6 +119,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   Future<void> _fetchChapter(Chapter chapter) async {
     setState(() => _isFetchingNext = true);
     try {
+      List<ReaderPage> newPages = [];
       if (DownloadDB.isDownloaded(chapter.url)) {
         final download = DownloadDB.getDownload(chapter.url);
         if (download != null) {
@@ -78,31 +127,37 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           if (await dir.exists()) {
             final files = dir.listSync().whereType<File>().toList();
             files.sort((a, b) => a.path.compareTo(b.path));
-            setState(() {
-              _pages.addAll(files.map((f) => ReaderPage(
+            newPages = files.map((f) => ReaderPage(
                 chapterUrl: chapter.url,
                 chapterTitle: chapter.title,
                 file: f,
-              )));
-              _isLoading = false;
-              _isFetchingNext = false;
-            });
-            return;
+              )).toList();
           }
         }
       }
 
-      final parser = getParserForSite(widget.sourceId);
-      final list = await parser.fetchChapterImages(chapter.url);
-      setState(() {
-        _pages.addAll(list.map((url) => ReaderPage(
+      if (newPages.isEmpty) {
+        final parser = getParserForSite(widget.sourceId);
+        final list = await parser.fetchChapterImages(chapter.url);
+        newPages = list.map((url) => ReaderPage(
           chapterUrl: chapter.url,
           chapterTitle: chapter.title,
           url: url,
-        )));
+        )).toList();
+      }
+
+      setState(() {
+        _pages.addAll(newPages);
         _isLoading = false;
         _isFetchingNext = false;
       });
+
+      // If this is the initial chapter and we have an initial page/offset, jump to it
+      if (chapter.url == widget.allChapters[widget.initialIndex].url && (widget.initialPage > 0 || widget.initialOffset > 0)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _jumpToInitialPosition();
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -114,6 +169,30 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     }
   }
 
+  void _jumpToInitialPosition() {
+    if (widget.initialPage <= 0 && widget.initialOffset <= 0) return;
+    
+    // Find the global index of the page within the total list of pages
+    int globalPageIndex = widget.initialPage; // In simple case where one chapter loaded
+    
+    if (globalPageIndex >= _pages.length) return;
+
+    final key = _pageKeys[globalPageIndex];
+    if (key == null) return;
+    final context = key.currentContext;
+    if (context == null) return;
+
+    final box = context.findRenderObject() as RenderBox;
+    final viewport = RenderAbstractViewport.of(box);
+
+    final RevealedOffset reveal = viewport.getOffsetToReveal(box, 0.0);
+    double targetOffset = reveal.offset + widget.initialOffset;
+
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(targetOffset.clamp(0, _scrollController.position.maxScrollExtent));
+    }
+  }
+
   void _loadNextChapter() {
      _currentChapterIndex--; // Next chapter in a latest-first list
      _fetchChapter(widget.allChapters[_currentChapterIndex]);
@@ -122,15 +201,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
       backgroundColor: Colors.black,
-      appBar: _showUI 
-        ? AppBar(
-            title: Text(_pages.isNotEmpty ? _pages.last.chapterTitle : widget.allChapters[widget.initialIndex].title),
-            backgroundColor: Colors.black.withOpacity(0.7),
-            elevation: 0,
-          )
-        : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
@@ -141,6 +212,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                   },
                   child: ListView.builder(
                     controller: _scrollController,
+                    padding: EdgeInsets.zero, // Remove any default padding
                     itemCount: _pages.length + (_isFetchingNext ? 1 : 0),
                     cacheExtent: 3000,
                     itemBuilder: (context, index) {
@@ -150,16 +222,20 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                           child: Center(child: CircularProgressIndicator()),
                         );
                       }
+                      
                       final page = _pages[index];
+                      final key = _pageKeys.putIfAbsent(index, () => GlobalKey());
+
+                      Widget imageWidget;
                       if (page.file != null) {
-                        return Image.file(
+                        imageWidget = Image.file(
                           page.file!,
                           fit: BoxFit.contain,
                           cacheWidth: 1200,
                           errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
                         );
                       } else {
-                        return CachedNetworkImage(
+                        imageWidget = CachedNetworkImage(
                           imageUrl: page.url!,
                           fit: BoxFit.contain,
                           memCacheWidth: 1200,
@@ -167,25 +243,36 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                           errorWidget: (context, url, error) => _errorPlaceholder(),
                         );
                       }
+
+                      return Container(
+                        key: key,
+                        child: imageWidget,
+                      );
                     },
                   ),
                 ),
-                if (!_showUI)
-                   Positioned(
-                     bottom: 20,
-                     right: 20,
-                     child: Container(
-                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                       decoration: BoxDecoration(
-                         color: Colors.black54,
-                         borderRadius: BorderRadius.circular(20),
-                       ),
-                       child: Text(
-                         'Seamless Reading ON',
-                         style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-                       ),
-                     ),
-                   ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedOpacity(
+                    opacity: _showUI ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: IgnorePointer(
+                      ignoring: !_showUI,
+                      child: AppBar(
+                        title: Text(_pages.isNotEmpty ? _pages.last.chapterTitle : widget.allChapters[widget.initialIndex].title),
+                        backgroundColor: Colors.black.withValues(alpha: 0.7),
+                        elevation: 0,
+                        leading: IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               ],
             ),
     );
