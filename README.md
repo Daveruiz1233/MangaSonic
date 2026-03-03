@@ -1,22 +1,61 @@
-# MangaSonic
+<div align="center">
+  <img src="assets/icon/app_icon.png" width="150" alt="Manga Sonic Logo">
+  <h1>Manga Sonic</h1>
+  <p><strong>A lightning-fast, minimalist, cross-platform manga reader for iOS, Android, and Windows.</strong></p>
+</div>
 
-MangaSonic is a simple, ultra-fast manga and manhua reader app built in Flutter/Dart, targeting iOS 15+ and Android 8+. Its primary goal is to provide maximum performance for reading manga, completely devoid of heavy abstraction layers or extension systems.
+---
+
+## What is Manga Sonic?
+
+Manga Sonic is designed with one primary goal: **uncompromising speed and simplicity.**
+It ditches heavy abstraction layers, extension systems, and bloated UIs in favor of a sleek, dark-mode focused experience that gets you reading your favorite manga instantly.
+
+### Why is it so fast?
+- **Concurrent Networking:** Leverages tuned HTTP connection pooling (allowing up to 20 concurrent host connections) and parallel chunk downloading.
+- **Offline-First Reading:** Once a chapter is downloaded, networking is completely bypassed. The reader strictly uses `Image.file()` ensuring zero lag or timeouts.
+- **Aggressive Caching:** Uses precise LRU disk caches and heavily clamped memory boundaries to aggressively load look-ahead pages and instantly discard unseen ones.
+- **Hardcoded Parsers:** Directly scrapes React Server Component (RSC) payloads and Next.js data to bypass DOM rendering overhead on supported sites.
+
+---
 
 ## Features
-- **Extremely Fast Image Loading:** Minimized latency with aggressive image prefetching, caching, and concurrent HTTP requests.
-- **Library Screen & Categories:** Users can save their favorite manga into custom categories (e.g., "Favorites", "Action") managed entirely offline via SQLite/Hive.
-- **Offline First:** A strict offline reading policy ensures that once a chapter is downloaded, local images are exclusively loaded without any network fallback, eliminating connection timeouts during reading.
-- **Downloads Manager:** Full control over chapter downloads, background fetching, and file storage.
-- **Three Supported Sites (Hardcoded Parsers):**
-  - [ManhuaTop](https://manhuatop.org/)
-  - [AsuraComic](https://asuracomic.net/)
-  - [ManhuaPlus](https://manhuaplus.com/)
+
+⚡ **Sleek Minimalist UI**
+A gorgeous, pure dark-mode interface designed to stay out of the way. No visual clutter, just your manga.
+
+📚 **Offline Library & Categories**
+Save favorites to categorized, offline-capable shelves powered by SQLite/Hive.
+
+🚀 **Advanced Parallel Download Manager**
+- Download up to **3 mangas concurrently**.
+- Download up to **4 chapters per manga concurrently** (12 active parallel threads).
+- Batch management: Multi-select entire manga groups or individual chapters to bulk-delete.
+
+🔎 **Supported Sources**
+- ManhuaTop
+- AsuraComic (Fully RSC payload compliant)
+- ManhuaPlus
+
+---
+
+## Screenshots
+
+<div align="center">
+  <img src="assets/screenshots/library.png" width="250" alt="Library Screen">
+  &nbsp;&nbsp;&nbsp;
+  <img src="assets/screenshots/downloads.png" width="250" alt="Downloads Manager">
+  &nbsp;&nbsp;&nbsp;
+  <img src="assets/screenshots/sources.png" width="250" alt="Sources Screen">
+</div>
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 - Flutter SDK (latest stable)
-- Supported targets: Android 8+ (API level 26+) and iOS 15+
+- Supported targets: Android 8+, iOS 15+, Windows 10+
 
 ### Build & Run
 ```bash
@@ -25,26 +64,12 @@ flutter pub get
 flutter run
 ```
 
-## Folder Structure
-```text
-manga_sonic/
-├── lib/
-│   ├── ui/        # Screens, widgets, and themes (Material & Cupertino)
-│   ├── data/      # Models, DB logic, and storage via path_provider
-│   ├── parser/    # Hardcoded HTML parsers for manhuatop, asuracomic, manhuaplus
-│   ├── cache/     # Specialized aggressive image caching and look-ahead
-│   └── utils/     # Helpers and common logic
+### Release Builds
+```bash
+flutter build apk --release
+flutter build windows --release
+flutter build ipa --release
 ```
-
-## Architecture & Performance Strategies
-
-MangaSonic ditches a complicated extension architecture to hardcode robust parsers for its 3 supported sites. This prevents abstraction overhead.
-
-### Image Loading Policies
-- **Concurrent Networking:** Leverages persistent HTTP clients with batch processing and `gzip/deflate` support explicitly enabled.
-- **Disk & Memory Caching:** Uses tuned LRU disk caches and heavily clamped memory caching boundaries. Unseen images are disposed of proactively.
-- **Prefetching:** Looks ahead of the scroll boundary to load low-res variations first if possible, transitioning rapidly to high-res. 
-- **Strict Offline Policy:** Network images are bypassed automatically if the database confirms a chapter is downloaded. Reader views will solely use `Image.file()`, removing networking completely.
 
 ## Contribution
 Contributions are welcome. Please ensure that PRs respect the core tenets of the app: minimal abstractions, maximum speed, and maintaining offline-first integrity for downloaded reading.

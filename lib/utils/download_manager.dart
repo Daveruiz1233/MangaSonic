@@ -4,30 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
+import 'package:manga_sonic/data/db/queue_db.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 
-class DownloadTask {
-  final String chapterUrl;
-  final String chapterTitle;
-  final String mangaTitle;
-  final String mangaUrl;
-  final String coverUrl;
-  final String author;
-  final List<String> genres;
-  final String sourceId;
+import 'package:http/io_client.dart';
 
-  DownloadTask({
-    required this.chapterUrl,
-    required this.chapterTitle,
-    required this.mangaTitle,
-    required this.mangaUrl,
-    required this.coverUrl,
-    required this.author,
-    required this.genres,
-    required this.sourceId,
-  });
-}
+typedef DownloadTask = QueuedTask;
+
 
 class DownloadStatus {
   final double progress;
@@ -50,7 +36,47 @@ class DownloadManager extends ChangeNotifier {
 
   final List<DownloadTask> _queue = [];
   bool _isProcessing = false;
-  final http.Client _client = http.Client();
+  bool _isOffline = false;
+  // Custom HttpClient with higher connection pool limit for parallel downloads
+  late final http.Client _client = IOClient(
+    HttpClient()..maxConnectionsPerHost = 20,
+  );
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  Future<void> init() async {
+    // Load persisted queue
+    final savedQueue = QueueDB.getQueue();
+    _queue.addAll(savedQueue);
+    
+    // Check initial connectivity
+    final result = await _connectivity.checkConnectivity();
+    _isOffline = result.contains(ConnectivityResult.none);
+    
+    // Listen for changes
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((results) {
+      final wasOffline = _isOffline;
+      _isOffline = results.contains(ConnectivityResult.none);
+      
+      if (wasOffline && !_isOffline && _queue.isNotEmpty && !_isProcessing) {
+        debugPrint('Internet restored, resuming downloads...');
+        _processQueue();
+      } else if (_isOffline) {
+        debugPrint('Internet lost, downloads will pause after current chunk...');
+      }
+      notifyListeners();
+    });
+
+    if (!_isOffline && _queue.isNotEmpty) {
+      _processQueue();
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
 
   // Progress tracking: chapterUrl -> DownloadStatus
   final Map<String, DownloadStatus> _statuses = {};
@@ -85,7 +111,7 @@ class DownloadManager extends ChangeNotifier {
     // Check if already in queue
     if (_queue.any((task) => task.chapterUrl == chapterUrl)) return;
 
-    _queue.add(DownloadTask(
+    final task = DownloadTask(
       chapterUrl: chapterUrl,
       chapterTitle: chapterTitle,
       mangaTitle: mangaTitle,
@@ -94,35 +120,81 @@ class DownloadManager extends ChangeNotifier {
       author: author,
       genres: genres,
       sourceId: sourceId,
-    ));
+    );
+
+    _queue.add(task);
+    await QueueDB.addToQueue(task);
 
     // The task is now queued. Status will be picked up dynamically by `getStatus()`.
     notifyListeners();
 
-    if (!_isProcessing) {
+    if (!_isProcessing && !_isOffline) {
       _processQueue();
     }
   }
 
+  // Concurrency limits
+  static const int _maxConcurrentManga = 3;
+  static const int _maxChaptersPerManga = 4;
+
+  // Tracks which chapter URLs are actively being downloaded
+  final Set<String> _activeChapters = {};
+
   Future<void> _processQueue() async {
-    if (_queue.isEmpty) {
+    if (_queue.isEmpty || _isOffline) {
       _isProcessing = false;
       return;
     }
 
     _isProcessing = true;
-    final task = _queue.first;
 
+    // Group pending (non-active) tasks by manga URL
+    final Map<String, List<DownloadTask>> byManga = {};
+    for (var task in _queue) {
+      if (_activeChapters.contains(task.chapterUrl)) continue;
+      byManga.putIfAbsent(task.mangaUrl, () => []).add(task);
+    }
+
+    if (byManga.isEmpty) return; // All queued items are already active
+
+    // Pick up to _maxConcurrentManga manga groups
+    final mangaGroups = byManga.entries.take(_maxConcurrentManga).toList();
+
+    // Collect tasks to launch
+    final List<DownloadTask> tasksToLaunch = [];
+    for (var entry in mangaGroups) {
+      final chapters = entry.value.take(_maxChaptersPerManga);
+      tasksToLaunch.addAll(chapters);
+    }
+
+    // Mark them all as active
+    for (var task in tasksToLaunch) {
+      _activeChapters.add(task.chapterUrl);
+    }
+
+    // Launch all tasks in parallel
+    await Future.wait(tasksToLaunch.map((task) => _executeSafe(task)));
+
+    // Re-evaluate the queue for more work
+    if (_queue.isNotEmpty && !_isOffline) {
+      _processQueue();
+    } else {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> _executeSafe(DownloadTask task) async {
     try {
       await _executeTask(task);
     } catch (e) {
       debugPrint('Error processing task ${task.chapterTitle}: $e');
       _statuses.remove(task.chapterUrl);
       notifyListeners();
+    } finally {
+      _activeChapters.remove(task.chapterUrl);
+      _queue.removeWhere((t) => t.chapterUrl == task.chapterUrl);
+      await QueueDB.removeFromQueue(task.chapterUrl);
     }
-
-    _queue.removeAt(0);
-    _processQueue();
   }
 
   Future<void> _executeTask(DownloadTask task) async {
@@ -144,13 +216,37 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
 
     final appDir = await getApplicationDocumentsDirectory();
-    final safeMangaTitle = task.mangaTitle.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final safeChapterTitle = task.chapterTitle.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     
-    final dirPath = '${appDir.path}/downloads/${task.sourceId}/$safeMangaTitle/$safeChapterTitle';
+    // Improved sanitization for Windows and cross-platform safety
+    String sanitize(String name) {
+      // Remove reserved characters: \ / : * ? " < > |
+      String sanitized = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      // Remove trailing dots and spaces which are problematic on Windows
+      sanitized = sanitized.trim().replaceAll(RegExp(r'\.+$'), '');
+      // Handle reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+      final reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+      if (reservedNames.contains(sanitized.toUpperCase())) {
+        sanitized = '${sanitized}_';
+      }
+      return sanitized.isEmpty ? 'unnamed' : sanitized;
+    }
+
+    final safeMangaTitle = sanitize(task.mangaTitle);
+    final safeChapterTitle = sanitize(task.chapterTitle);
+    
+    final dirPath = p.join(appDir.path, 'downloads', task.sourceId, safeMangaTitle, safeChapterTitle);
+    debugPrint('Downloading to: $dirPath');
+    
     final directory = Directory(dirPath);
     if (!await directory.exists()) {
-      await directory.create(recursive: true);
+      try {
+        await directory.create(recursive: true);
+      } catch (e) {
+        debugPrint('Failed to create directory $dirPath: $e');
+        _statuses.remove(task.chapterUrl);
+        notifyListeners();
+        return;
+      }
     }
 
     int successCount = 0;
@@ -162,10 +258,17 @@ class DownloadManager extends ChangeNotifier {
       final indexOffset = i;
 
       final results = await Future.wait(chunk.asMap().entries.map((entry) async {
+        if (_isOffline) return false;
         final imgUrl = entry.value;
         final imgIndex = indexOffset + entry.key;
         return _downloadImage(imgUrl, dirPath, imgIndex, parser.baseUrl);
       }));
+      
+      if (_isOffline) {
+        debugPrint('Download paused due to no internet.');
+        _isProcessing = false;
+        return; // Current task remains at head of queue
+      }
       
       successCount += results.where((r) => r).length;
       
@@ -212,7 +315,8 @@ class DownloadManager extends ChangeNotifier {
         ).timeout(const Duration(seconds: 30));
 
         if (res.statusCode == 200) {
-          final file = File('$dirPath/${index.toString().padLeft(4, '0')}.jpg');
+          final filePath = p.join(dirPath, '${index.toString().padLeft(4, '0')}.jpg');
+          final file = File(filePath);
           await file.writeAsBytes(res.bodyBytes);
           return true;
         }

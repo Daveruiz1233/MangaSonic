@@ -14,6 +14,80 @@ class DownloadsScreen extends StatefulWidget {
 }
 
 class _DownloadsScreenState extends State<DownloadsScreen> {
+  // Multi-select state
+  bool _isSelecting = false;
+  final Set<String> _selectedChapterUrls = {};
+
+  void _enterSelectionMode(String chapterUrl) {
+    setState(() {
+      _isSelecting = true;
+      _selectedChapterUrls.add(chapterUrl);
+    });
+  }
+
+  void _toggleSelection(String chapterUrl) {
+    setState(() {
+      if (_selectedChapterUrls.contains(chapterUrl)) {
+        _selectedChapterUrls.remove(chapterUrl);
+        if (_selectedChapterUrls.isEmpty) {
+          _isSelecting = false;
+        }
+      } else {
+        _selectedChapterUrls.add(chapterUrl);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelecting = false;
+      _selectedChapterUrls.clear();
+    });
+  }
+
+  void _selectAll(List<_MangaDownloadGroup> groups) {
+    setState(() {
+      for (var group in groups) {
+        for (var ch in group.completedChapters) {
+          _selectedChapterUrls.add(ch.chapterUrl);
+        }
+      }
+    });
+  }
+
+  void _selectAllInGroup(_MangaDownloadGroup group) {
+    setState(() {
+      for (var ch in group.completedChapters) {
+        _selectedChapterUrls.add(ch.chapterUrl);
+      }
+    });
+  }
+
+  void _deselectAllInGroup(_MangaDownloadGroup group) {
+    setState(() {
+      for (var ch in group.completedChapters) {
+        _selectedChapterUrls.remove(ch.chapterUrl);
+      }
+      if (_selectedChapterUrls.isEmpty) {
+        _isSelecting = false;
+      }
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedChapterUrls.clear();
+    });
+  }
+
+  Future<void> _deleteSelected(DownloadManager manager) async {
+    final urls = List<String>.from(_selectedChapterUrls);
+    _exitSelectionMode();
+    for (var url in urls) {
+      await manager.deleteChapter(url);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<DownloadManager>(
@@ -48,34 +122,113 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
         final sortedGroups = groups.values.toList();
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Download Manager'),
-            actions: [
-              if (queue.isNotEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: 16),
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        // Count total selectable (completed) chapters
+        final totalSelectable = sortedGroups.fold<int>(
+          0, (sum, g) => sum + g.completedChapters.length);
+        final allSelected = _selectedChapterUrls.length == totalSelectable && totalSelectable > 0;
+
+        return PopScope(
+          canPop: !_isSelecting,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && _isSelecting) {
+              _exitSelectionMode();
+            }
+          },
+          child: Scaffold(
+            appBar: _isSelecting
+                ? AppBar(
+                    leading: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: _exitSelectionMode,
                     ),
+                    title: Text('${_selectedChapterUrls.length} selected'),
+                    actions: [
+                      // Select All / Deselect All
+                      IconButton(
+                        icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+                        tooltip: allSelected ? 'Deselect All' : 'Select All',
+                        onPressed: () {
+                          if (allSelected) {
+                            _deselectAll();
+                          } else {
+                            _selectAll(sortedGroups);
+                          }
+                        },
+                      ),
+                      // Delete selected
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete Selected',
+                        onPressed: _selectedChapterUrls.isEmpty
+                            ? null
+                            : () => _showDeleteConfirmation(context, manager),
+                      ),
+                    ],
+                  )
+                : AppBar(
+                    title: const Text('Download Manager'),
+                    actions: [
+                      if (queue.isNotEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: 16),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            ),
+                          ),
+                        )
+                    ],
                   ),
-                )
-            ],
+            body: sortedGroups.isEmpty
+                ? const Center(child: Text('No active or completed downloads'))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: sortedGroups.length,
+                    itemBuilder: (context, index) {
+                      return _MangaGroupTile(
+                        group: sortedGroups[index],
+                        manager: manager,
+                        isSelecting: _isSelecting,
+                        selectedUrls: _selectedChapterUrls,
+                        onLongPress: _enterSelectionMode,
+                        onToggle: _toggleSelection,
+                        onSelectAllInGroup: _selectAllInGroup,
+                        onDeselectAllInGroup: _deselectAllInGroup,
+                      );
+                    },
+                  ),
           ),
-          body: sortedGroups.isEmpty
-              ? const Center(child: Text('No active or completed downloads'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: sortedGroups.length,
-                  itemBuilder: (context, index) {
-                    return _MangaGroupTile(group: sortedGroups[index], manager: manager);
-                  },
-                ),
         );
       },
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, DownloadManager manager) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Downloads'),
+        content: Text(
+          'Delete ${_selectedChapterUrls.length} selected chapter${_selectedChapterUrls.length == 1 ? '' : 's'}? '
+          'This will remove the downloaded files from your device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _deleteSelected(manager);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -99,16 +252,30 @@ class _MangaDownloadGroup {
 
   double get overallProgress {
     if (activeTasks.isEmpty) return 1.0;
-    // Simple heuristic: status of the first active task for this manga
-    return 0.5; // Placeholder for more complex aggregation if needed
+    return 0.5;
   }
 }
 
 class _MangaGroupTile extends StatefulWidget {
   final _MangaDownloadGroup group;
   final DownloadManager manager;
+  final bool isSelecting;
+  final Set<String> selectedUrls;
+  final void Function(String chapterUrl) onLongPress;
+  final void Function(String chapterUrl) onToggle;
+  final void Function(_MangaDownloadGroup group) onSelectAllInGroup;
+  final void Function(_MangaDownloadGroup group) onDeselectAllInGroup;
 
-  const _MangaGroupTile({required this.group, required this.manager});
+  const _MangaGroupTile({
+    required this.group,
+    required this.manager,
+    required this.isSelecting,
+    required this.selectedUrls,
+    required this.onLongPress,
+    required this.onToggle,
+    required this.onSelectAllInGroup,
+    required this.onDeselectAllInGroup,
+  });
 
   @override
   State<_MangaGroupTile> createState() => _MangaGroupTileState();
@@ -131,9 +298,19 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
       progress = (completedCount + activeSubtaskProgress) / totalCount;
     }
 
+    // Count how many of this group's chapters are selected
+    final selectedInGroup = widget.group.completedChapters
+        .where((ch) => widget.selectedUrls.contains(ch.chapterUrl))
+        .length;
+    final hasSelectedInGroup = selectedInGroup > 0;
+    final allChaptersSelected = selectedInGroup == widget.group.completedChapters.length
+        && widget.group.completedChapters.isNotEmpty;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
+      // Subtle highlight when some chapters in this group are selected
+      color: hasSelectedInGroup ? theme.colorScheme.primary.withOpacity(0.08) : null,
       child: Column(
         children: [
           Padding(
@@ -176,7 +353,7 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                         widget.group.author,
                         style: const TextStyle(color: Colors.white54, fontSize: 12),
                       ),
-                      const Spacer(),
+                      const SizedBox(height: 8),
                       if (isActive) ...[
                         Row(
                           children: [
@@ -193,6 +370,11 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                               style: const TextStyle(fontSize: 10, color: Colors.white70),
                             ),
                           ],
+                        ),
+                      ] else if (widget.isSelecting && hasSelectedInGroup) ...[
+                        Text(
+                          '$selectedInGroup of ${widget.group.completedChapters.length} selected',
+                          style: TextStyle(fontSize: 10, color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                         ),
                       ] else ...[
                         Text(
@@ -212,6 +394,35 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
           ),
           if (_isExpanded) ...[
             const Divider(height: 1),
+            // Per-manga Select All / Deselect All row
+            if (widget.isSelecting && widget.group.completedChapters.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: allChaptersSelected,
+                      tristate: true,
+                      onChanged: (_) {
+                        if (allChaptersSelected) {
+                          widget.onDeselectAllInGroup(widget.group);
+                        } else {
+                          widget.onSelectAllInGroup(widget.group);
+                        }
+                      },
+                      activeColor: theme.colorScheme.primary,
+                    ),
+                    Text(
+                      allChaptersSelected ? 'Deselect All' : 'Select All',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Container(
               constraints: const BoxConstraints(maxHeight: 300),
               child: ListView(
@@ -219,14 +430,33 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                 padding: EdgeInsets.zero,
                 children: [
                   // Completed chapters
-                  ...widget.group.completedChapters.map((ch) => ListTile(
-                    dense: true,
-                    title: Text(ch.chapterTitle),
-                    trailing: const Icon(Icons.check_circle, color: Colors.green, size: 18),
-                    onTap: () => _openReader(context, ch),
-                    onLongPress: () => widget.manager.deleteChapter(ch.chapterUrl),
-                  )),
-                  // Loading/Queued chapters
+                  ...widget.group.completedChapters.map((ch) {
+                    final isSelected = widget.selectedUrls.contains(ch.chapterUrl);
+                    return ListTile(
+                      dense: true,
+                      // Show checkbox when in selection mode
+                      leading: widget.isSelecting
+                          ? Checkbox(
+                              value: isSelected,
+                              onChanged: (_) => widget.onToggle(ch.chapterUrl),
+                              activeColor: theme.colorScheme.primary,
+                            )
+                          : null,
+                      title: Text(ch.chapterTitle),
+                      trailing: widget.isSelecting
+                          ? null
+                          : const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      selected: isSelected,
+                      selectedTileColor: theme.colorScheme.primary.withOpacity(0.12),
+                      onTap: widget.isSelecting
+                          ? () => widget.onToggle(ch.chapterUrl)
+                          : () => _openReader(context, ch),
+                      onLongPress: widget.isSelecting
+                          ? null
+                          : () => widget.onLongPress(ch.chapterUrl),
+                    );
+                  }),
+                  // Loading/Queued chapters (not selectable)
                   ...widget.group.activeTasks.map((task) {
                     final status = widget.manager.getStatus(task.chapterUrl);
                     return ListTile(

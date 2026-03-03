@@ -4,6 +4,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
+import 'package:manga_sonic/data/db/queue_db.dart';
+import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/services/theme_service.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 import 'ui/screens/home_screen.dart';
@@ -14,9 +16,12 @@ void main() async {
   await LibraryDB.init();
   await DownloadDB.init();
   await HistoryDB.init();
+  await QueueDB.init();
+  await MangaCacheDB.init();
   
   final themeService = ThemeService();
   final downloadManager = DownloadManager();
+  await downloadManager.init(); // Load queue and start listener
   
   runApp(
     MultiProvider(

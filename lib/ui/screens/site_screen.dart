@@ -38,6 +38,7 @@ class _SiteScreenState extends State<SiteScreen> {
   }
 
   Future<void> _fetchData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final parser = getParserForSite(widget.siteName);
@@ -49,6 +50,7 @@ class _SiteScreenState extends State<SiteScreen> {
         newMangas = await parser.fetchMangaList(_currentPage);
       }
 
+      if (!mounted) return;
       setState(() {
         _mangas.addAll(newMangas);
         _isLoading = false;
@@ -64,6 +66,7 @@ class _SiteScreenState extends State<SiteScreen> {
         // Retry once
         return _fetchData();
       }
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

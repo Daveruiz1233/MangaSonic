@@ -7,6 +7,7 @@ import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
+import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
@@ -39,6 +40,7 @@ class _MangaScreenState extends State<MangaScreen> {
   final ScrollController _scrollController = ScrollController();
   double _opacity = 0.0;
   Color? _dominantColor;
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -74,7 +76,13 @@ class _MangaScreenState extends State<MangaScreen> {
   }
 
   Future<void> _fetchData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isOffline = false;
+    });
+
+    final cachedDetails = MangaCacheDB.getDetails(widget.mangaUrl);
+    
     try {
       final parser = getParserForSite(widget.sourceId);
       final manga = Manga(
@@ -84,11 +92,35 @@ class _MangaScreenState extends State<MangaScreen> {
         sourceId: widget.sourceId,
       );
       final details = await parser.fetchMangaDetails(manga);
-      setState(() {
-        _details = details;
-        _isLoading = false;
-      });
+      
+      // Save to cache if successfully fetched
+      await MangaCacheDB.saveDetails(widget.mangaUrl, details);
+
+      if (mounted) {
+        setState(() {
+          _details = details;
+          _isLoading = false;
+          _isOffline = false;
+        });
+      }
     } catch (e) {
+      debugPrint('Fetch error: $e');
+      
+      // If fetch fails, try to use cache
+      if (cachedDetails != null) {
+        if (mounted) {
+          setState(() {
+            _details = cachedDetails;
+            _isLoading = false;
+            _isOffline = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Working offline. Showing cached details.'))
+          );
+        }
+        return;
+      }
+
       if (e.toString().contains('403') || e.toString().contains('Cloudflare')) {
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(
@@ -98,8 +130,9 @@ class _MangaScreenState extends State<MangaScreen> {
         await CloudflareInterceptor.bypass(widget.mangaUrl);
         return _fetchData();
       }
-      setState(() => _isLoading = false);
+      
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
@@ -304,6 +337,21 @@ class _MangaScreenState extends State<MangaScreen> {
                             'CHAPTERS',
                             style: TextStyle(letterSpacing: 1.5, fontWeight: FontWeight.bold, color: Colors.white54),
                           ),
+                          if (_isOffline) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 0.5),
+                              ),
+                              child: const Text(
+                                'OFFLINE',
+                                style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                           Text(
                             '${chapters.length} Chapters',
@@ -552,11 +600,14 @@ class _MangaScreenState extends State<MangaScreen> {
   Future<void> _downloadChapters(List<Chapter> chapters) async {
     if (chapters.isEmpty) return;
     
+    // Bulk downloads: descending order to ascending (oldest to newest)
+    final downloadList = chapters.length > 1 ? chapters.reversed.toList() : chapters;
+    
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Adding ${chapters.length} chapters to downloads...'))
+      SnackBar(content: Text('Adding ${downloadList.length} chapters to downloads...'))
     );
 
-    for (var chapter in chapters) {
+    for (var chapter in downloadList) {
         try {
           // Note: DownloadManager will soon handle queueing internally
           await DownloadManager().downloadChapter(

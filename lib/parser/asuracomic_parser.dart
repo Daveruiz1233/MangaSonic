@@ -1,126 +1,132 @@
 import 'package:html/parser.dart' as parser;
 import 'package:manga_sonic/data/models/models.dart';
 import 'base_parser.dart';
+import 'dart:convert';
 
 class AsuraComicParser extends BaseParser {
   AsuraComicParser() : super(siteName: 'AsuraComic', baseUrl: 'https://asuracomic.net');
 
-  @override
-  Future<List<Manga>> fetchMangaList(int page) async {
-    // Asura now uses path-based pagination on their homepage grid
-    final response = await getRequest('$baseUrl/page/$page');
-    final document = parser.parse(response.body);
-    
-    final elements = document.querySelectorAll('a[href*="/series/"]');
-    
-    final Map<String, Map<String, String>> mangaMap = {};
-    for (var aTag in elements) {
-      final title = aTag.text.trim();
-      if (title.isEmpty || title == "Series" || title.contains("Chapter")) continue; // Skip nav/chapter links
-
-      final href = aTag.attributes['href'] ?? '';
-      if (href.isEmpty) continue;
-      
-      final url = href.startsWith('http') ? href : (href.startsWith('/') ? '$baseUrl$href' : '$baseUrl/$href');
-      
-      if (!mangaMap.containsKey(url)) {
-        mangaMap[url] = {'title': title, 'coverUrl': ''};
-      }
-      
-      final img = aTag.querySelector('img');
-      if (img != null) {
-        final src = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
-        if (src.isNotEmpty && mangaMap[url]!['coverUrl']!.isEmpty) {
-          mangaMap[url]!['coverUrl'] = src;
-        }
+  /// Finds the main manga grid container by checking for the distinctive
+  /// class combination: grid-cols-2 + md:grid-cols-5 + gap-3 + p-4.
+  /// This filters out the sidebar "Popular" section and other grids.
+  dynamic _findMainGrid(dynamic document) {
+    final divs = document.querySelectorAll('div');
+    for (var div in divs) {
+      final cl = div.className.toString();
+      if (cl.contains('md:grid-cols-5') && cl.contains('gap-3') && cl.contains('p-4')) {
+        return div;
       }
     }
-    
-    return mangaMap.entries
-        .where((e) => e.value['title']!.isNotEmpty)
-        .map((e) => Manga(title: e.value['title']!, url: e.key, coverUrl: e.value['coverUrl']!, sourceId: 'asuracomic'))
-        .toList();
+    return null;
+  }
+
+  List<Manga> _parseMangaGrid(dynamic container) {
+    if (container == null) return [];
+
+    final links = container.querySelectorAll('a');
+    final List<Manga> list = [];
+
+    for (var aTag in links) {
+      final href = aTag.attributes['href'] ?? '';
+      if (href.isEmpty || !href.contains('series/')) continue;
+
+      final url = Uri.parse(baseUrl).resolve(href).toString();
+      if (list.any((m) => m.url == url)) continue;
+
+      // Title: span with class containing "font-bold" and "block"
+      String title = '';
+      final spans = aTag.querySelectorAll('span');
+      for (var s in spans) {
+        final cl = s.className.toString();
+        if (cl.contains('block') && cl.contains('font-bold')) {
+          title = s.text.trim();
+          break;
+        }
+      }
+
+      // Fallback: first span with font-bold that isn't a status label
+      if (title.isEmpty) {
+        for (var s in spans) {
+          final t = s.text.trim();
+          if (t.isEmpty) continue;
+          if (t == 'MANHWA' || t == 'MANHUA' || t == 'MANGA' || t == 'MANGATOON') continue;
+          if (t == 'Ongoing' || t == 'Completed' || t == 'Hiatus' || t == 'Dropped') continue;
+          final cl = s.className.toString();
+          if (cl.contains('font-bold') || cl.contains('font-[600]')) {
+            title = t;
+            break;
+          }
+        }
+      }
+
+      if (title.isEmpty) continue;
+
+      // Cover image
+      final img = aTag.querySelector('img');
+      final coverUrl = img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
+
+      list.add(Manga(title: title, url: url, coverUrl: coverUrl, sourceId: 'asuracomic'));
+    }
+
+    return list;
+  }
+
+  @override
+  Future<List<Manga>> fetchMangaList(int page) async {
+    final response = await getRequest('$baseUrl/series?page=$page');
+    final document = parser.parse(response.body);
+    final grid = _findMainGrid(document);
+    return _parseMangaGrid(grid);
   }
 
   @override
   Future<List<Manga>> searchManga(String query, int page) async {
-    // Asura's search endpoint currently ignores the page parameter and always returns the first 10 results.
-    // Returning empty array for page > 1 prevents infinite duplicate scrolling.
-    if (page > 1) {
-      return [];
-    }
-
-    final response = await getRequest('$baseUrl/series?name=$query');
+    final response = await getRequest('$baseUrl/series?name=$query&page=$page');
     final document = parser.parse(response.body);
-    final elements = document.querySelectorAll('a[href*="/series/"]');
-    
-    final Map<String, Map<String, String>> mangaMap = {};
-    for (var aTag in elements) {
-      final href = aTag.attributes['href'] ?? '';
-      if (href.isEmpty) continue;
-      
-      final url = href.startsWith('http') ? href : (href.startsWith('/') ? '$baseUrl$href' : '$baseUrl/$href');
-      
-      if (!mangaMap.containsKey(url)) {
-        mangaMap[url] = {'title': '', 'coverUrl': ''};
-      }
-      
-      final title = aTag.text.trim();
-      if (title.isNotEmpty && mangaMap[url]!['title']!.isEmpty) {
-        mangaMap[url]!['title'] = title;
-      }
-      
-      final img = aTag.querySelector('img');
-      if (img != null) {
-        final src = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
-        if (src.isNotEmpty && mangaMap[url]!['coverUrl']!.isEmpty) {
-          mangaMap[url]!['coverUrl'] = src;
-        }
-      }
-    }
-    
-    return mangaMap.entries
-        .where((e) => e.value['title']!.isNotEmpty)
-        .map((e) => Manga(title: e.value['title']!, url: e.key, coverUrl: e.value['coverUrl']!, sourceId: 'asuracomic'))
-        .toList();
+    final grid = _findMainGrid(document);
+    return _parseMangaGrid(grid);
   }
 
   @override
   Future<List<Chapter>> fetchChapters(String mangaUrl) async {
     final response = await getRequest(mangaUrl);
     final document = parser.parse(response.body);
-    
-    final chapterElements = document.querySelectorAll('main a[href*="/chapter/"], a[href*="/chapter/"], .chapter-list a, .eph-num a, .chbox, .chplist a, #chapterlist a, .wp-manga-chapter a');
-    
+
+    final chapterElements = document.querySelectorAll('a[href*="/chapter/"]');
+
     List<Chapter> chapters = [];
+    final baseUri = Uri.parse(mangaUrl);
+
     for (var element in chapterElements) {
       final href = element.attributes['href'] ?? '';
       if (href.isEmpty) continue;
-      
-      String url = '';
-      if (href.startsWith('http')) {
-         url = href;
+
+      final url = baseUri.resolve(href).toString();
+      if (!url.contains('/chapter/')) continue;
+
+      // Extract chapter info from h3 elements inside the link
+      final h3s = element.querySelectorAll('h3');
+
+      String chapterName = '';
+
+      if (h3s.isNotEmpty) {
+        chapterName = h3s.first.text.trim();
       } else {
-         if (href.startsWith('/')) {
-            url = '$baseUrl$href';
-         } else {
-            // Handle relative links like "pick-me-up.../chapter/190"
-            // Ensure mangaUrl ends with a slash for correct resolution
-            final base = mangaUrl.endsWith('/') ? mangaUrl : '$mangaUrl/';
-            url = Uri.parse(base).resolve(href).toString();
-         }
+        chapterName = element.text.trim().replaceAll(RegExp(r'\s+'), ' ').trim();
       }
 
-      // Filter: Ensure the URL belongs to this manga and contains "/chapter/"
-      final mangaSlug = mangaUrl.split('/').lastWhere((s) => s.isNotEmpty);
-      if (!url.contains(mangaSlug) || !url.contains('/chapter/')) continue;
+      // Skip promotional buttons ("First Chapter", "New Chapter")
+      if (chapterName == 'First Chapter' || chapterName == 'New Chapter') continue;
 
-      final title = element.text.trim().replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-      
-      if (url.isNotEmpty && !chapters.any((c) => c.url == url)) {
-        chapters.add(Chapter(title: title, url: url, mangaUrl: mangaUrl));
+      // Skip if chapter name is empty
+      if (chapterName.isEmpty) continue;
+
+      // Deduplicate by URL
+      if (!chapters.any((c) => c.url == url)) {
+        chapters.add(Chapter(title: chapterName, url: url, mangaUrl: mangaUrl));
       }
     }
+
     return chapters;
   }
 
@@ -129,67 +135,70 @@ class AsuraComicParser extends BaseParser {
     final response = await getRequest(manga.url);
     final document = parser.parse(response.body);
 
-    // Title and Cover from existing manga object if possible, 
-    // but we can also re-extract them to be sure.
-    
-    // Description
+    // Description: span with color text-[#A2A2A2]
     String description = '';
-    final synopsisHeader = document.querySelectorAll('h3, span').firstWhere(
-      (e) => e.text.contains('Synopsis'),
-      orElse: () => document.createElement('div'),
-    );
-    if (synopsisHeader.text.contains('Synopsis')) {
-      final descElements = synopsisHeader.parent?.querySelectorAll('span') ?? [];
-      for (var element in descElements) {
-        if (element.classes.contains('text-[#A2A2A2]')) {
-          description = element.text.trim();
+    final spans = document.querySelectorAll('span');
+    for (var span in spans) {
+      if (span.classes.any((c) => c.contains('text-[#A2A2A2]'))) {
+        final t = span.text.trim();
+        if (t.length > 20) { // Avoid short labels
+          description = t;
           break;
         }
       }
     }
 
-    // Metadata (Author, Artist, Status)
+    // Metadata
     String author = 'Unknown';
     String artist = 'Unknown';
     String status = 'Unknown';
 
-    final metadataElements = document.querySelectorAll('h3.text-sm');
-    for (var i = 0; i < metadataElements.length; i++) {
-      final text = metadataElements[i].text.trim();
-      if (text == 'Author' && i + 1 < metadataElements.length) {
-        author = metadataElements[i + 1].text.trim();
-      } else if (text == 'Artist' && i + 1 < metadataElements.length) {
-        artist = metadataElements[i + 1].text.trim();
-      } else if (text == 'Status' && i + 1 < metadataElements.length) {
-        status = metadataElements[i + 1].text.trim();
+    final h3s = document.querySelectorAll('h3');
+    for (var i = 0; i < h3s.length; i++) {
+      final text = h3s[i].text.trim().toLowerCase();
+      if (text == 'author' && i + 1 < h3s.length) {
+        author = h3s[i+1].text.trim();
+      } else if (text == 'artist' && i + 1 < h3s.length) {
+        artist = h3s[i+1].text.trim();
+      } else if (text == 'status') {
+         final container = h3s[i].parent;
+         if (container != null) {
+           final val = container.querySelectorAll('h3').firstWhere(
+             (e) => e != h3s[i],
+             orElse: () => document.createElement('h3'),
+           ).text.trim();
+           if (val.isNotEmpty) status = val;
+         }
       }
     }
+    if (author == '_') author = 'Unknown';
+    if (artist == '_') artist = 'Unknown';
 
-    // Genres
+    // Genres: bg-[#343434]
     List<String> genres = [];
-    final genreElements = document.querySelectorAll('button.text-white, a.text-white, span.text-white');
-    for (var element in genreElements) {
-      if (element.classes.contains('bg-[#343434]')) {
-        genres.add(element.text.trim());
+    final buttons = document.querySelectorAll('button');
+    for (var btn in buttons) {
+      if (btn.classes.any((c) => c.contains('bg-[#343434]'))) {
+        genres.add(btn.text.trim());
       }
     }
 
-    // Chapters
     final chapters = await fetchChapters(manga.url);
 
-    // Suggestions (Popular Today or Related)
+    // Suggestions from the "Related Series" / sidebar
     List<Manga> suggestions = [];
-    final suggestionElements = document.querySelectorAll('aside a[href*="/series/"]');
-    for (var element in suggestionElements) {
-      final href = element.attributes['href'] ?? '';
-      final url = href.startsWith('http') ? href : '$baseUrl$href';
-      final title = element.querySelector('span.font-bold')?.text.trim() ?? '';
-      final coverUrl = element.querySelector('img')?.attributes['src'] ?? '';
-      
-      if (title.isNotEmpty && !suggestions.any((m) => m.url == url) && url != manga.url) {
-        suggestions.add(Manga(title: title, url: url, coverUrl: coverUrl, sourceId: 'asuracomic'));
-      }
-      if (suggestions.length >= 6) break;
+    final asideLinks = document.querySelectorAll('aside a[href*="series/"]');
+    for (var element in asideLinks) {
+       final href = element.attributes['href'] ?? '';
+       final url = Uri.parse(baseUrl).resolve(href).toString();
+       final title = element.querySelector('span.font-bold')?.text.trim() ?? '';
+       final img = element.querySelector('img');
+       final coverUrl = img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
+       
+       if (title.isNotEmpty && !suggestions.any((m) => m.url == url) && url != manga.url) {
+         suggestions.add(Manga(title: title, url: url, coverUrl: coverUrl, sourceId: 'asuracomic'));
+       }
+       if (suggestions.length >= 6) break;
     }
 
     return MangaDetails(
@@ -211,21 +220,46 @@ class AsuraComicParser extends BaseParser {
     if (document.body?.text.contains('Login to continue reading') ?? false) {
       throw Exception('Login required to read this chapter');
     }
-    
-    final images = document.querySelectorAll('div.flex.flex-col.items-center.justify-center img, #readerarea img');
-    
-    List<String> list = [];
-    for (var img in images) {
-      final src = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
-      if (src.isNotEmpty && 
-          !src.contains('thumb') && 
-          !src.contains('logo') && 
-          !src.contains('avatar') &&
-          !src.contains('discord') &&
-          src.contains('/storage/media/')) {
-        list.add(src.trim());
+
+    // The actual chapter page images are NOT in the rendered HTML <img> tags.
+    // They are embedded in the React Server Component (RSC) script payloads.
+    // Real chapter pages have numeric filenames like "00-optimized.webp",
+    // "01-optimized.webp", etc. Cover/thumbnail images use hash-based
+    // filenames like "01K6ZFV8K4PJJPY2RGMA9RBXZP-optimized.webp".
+
+    // Pattern: URLs with /conversions/{digits}-optimized.webp
+    final pagePattern = RegExp(
+      r'https?://gg\.asuracomic\.net/storage/media/\d+/conversions/(\d+)-optimized\.webp',
+    );
+
+    final Set<String> seen = {};
+    final List<_NumberedImage> pages = [];
+
+    // Search all script tags for RSC payloads
+    final scripts = document.querySelectorAll('script');
+    for (var script in scripts) {
+      final text = script.text;
+      if (!text.contains('asuracomic.net')) continue;
+
+      for (var match in pagePattern.allMatches(text)) {
+        final url = match.group(0)!;
+        final pageNum = int.parse(match.group(1)!);
+        if (seen.add(url)) {
+          pages.add(_NumberedImage(pageNum, url));
+        }
       }
     }
-    return list;
+
+    // Sort by page number to ensure correct reading order (00, 01, 02, ...)
+    pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+
+    return pages.map((p) => p.url).toList();
   }
 }
+
+class _NumberedImage {
+  final int pageNumber;
+  final String url;
+  _NumberedImage(this.pageNumber, this.url);
+}
+

@@ -37,6 +37,8 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   final Map<int, GlobalKey> _pageKeys = {};
   int _currentChapterIndex = 0;
   bool _isFetchingNext = false;
+  bool _isFetchingPrev = false;
+  DateTime _lastSaveTime = DateTime.now();
 
   @override
   void initState() {
@@ -55,60 +57,69 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   void _onScroll() {
     if (_pages.isEmpty) return;
     
-    // Exact Progress Tracking:
-    // We find which page is currently most visible in the viewport
-    int currentActiveIndex = -1;
-    double minTopDistance = double.infinity;
+    // Throttled Progress Tracking & Mark-As-Read:
+    if (DateTime.now().difference(_lastSaveTime) < const Duration(milliseconds: 200)) return;
+    _lastSaveTime = DateTime.now();
 
+    int firstVisibleIndex = -1;
+    
+    // We iterate through pages to find the first visible one and check for chapter boundaries
     for (int i = 0; i < _pages.length; i++) {
-      final key = _pageKeys[i];
-      if (key == null) continue;
-      final context = key.currentContext;
-      if (context == null) continue;
+        final key = _pageKeys[i];
+        if (key == null) continue;
+        final context = key.currentContext;
+        if (context == null) continue;
 
-      final box = context.findRenderObject() as RenderBox;
-      final position = box.localToGlobal(Offset.zero, ancestor: context.findAncestorRenderObjectOfType<RenderObject>());
-      final top = position.dy;
+        final box = context.findRenderObject() as RenderBox;
+        // Get position relative to the screen/scrollable area
+        final position = box.localToGlobal(Offset.zero);
+        final top = position.dy;
+        final bottom = top + box.size.height;
 
-      // The active page is the one whose top is closest to the top of the viewport (0)
-      // or covers the top of the viewport.
-      if (top.abs() < minTopDistance) {
-        minTopDistance = top.abs();
-        currentActiveIndex = i;
-      }
-    }
+        final currentPage = _pages[i];
 
-    if (currentActiveIndex != -1) {
-      final currentPage = _pages[currentActiveIndex];
-      
-      // Calculate offset within this page
-      final key = _pageKeys[currentActiveIndex]!;
-      final box = key.currentContext!.findRenderObject() as RenderBox;
-      final position = box.localToGlobal(Offset.zero);
-      final offsetWithinPage = position.dy.abs();
-
-      // Find relative page index within its own chapter
-      int pageIndexInChapter = 0;
-      for (int i = currentActiveIndex - 1; i >= 0; i--) {
-        if (_pages[i].chapterUrl == currentPage.chapterUrl) {
-          pageIndexInChapter++;
-        } else {
-          break;
+        // 1. Precise Mark-As-Read:
+        // Check if this is the last page of a chapter
+        final isLastPageOfChapter = i == _pages.length - 1 || _pages[i+1].chapterUrl != currentPage.chapterUrl;
+        
+        if (isLastPageOfChapter && bottom < 0) {
+            // The last page of this chapter has scrolled completely past the top
+            if (!HistoryDB.isRead(currentPage.chapterUrl)) {
+                HistoryDB.markAsRead(currentPage.chapterUrl, isRead: true);
+                debugPrint('Marked as read: ${currentPage.chapterTitle}');
+            }
         }
+
+        // 2. Smart Progress Tracking:
+        // The "active" page is the first one that is currently visible (bottom > 0)
+        if (firstVisibleIndex == -1 && bottom > 10) { // Slight buffer
+            firstVisibleIndex = i;
+            
+            // Calculate offset within this page (how much is scrolled past the top)
+            final offsetWithinPage = top < 0 ? top.abs() : 0.0;
+
+            // Find relative page index within its own chapter
+            int pageIndexInChapter = 0;
+            for (int k = i - 1; k >= 0; k--) {
+                if (_pages[k].chapterUrl == currentPage.chapterUrl) {
+                    pageIndexInChapter++;
+                } else {
+                    break;
+                }
+            }
+            
+            HistoryDB.saveProgress(currentPage.chapterUrl, pageIndexInChapter, lastPageOffset: offsetWithinPage);
+        }
+    }
+
+    // Load previous chapter logic (Upward)
+    if (_scrollController.position.pixels < 800) {
+      if (!_isFetchingPrev && _currentChapterIndex < widget.allChapters.length - 1) {
+         _loadPrevChapter();
       }
-      
-      HistoryDB.saveProgress(currentPage.chapterUrl, pageIndexInChapter, lastPageOffset: offsetWithinPage);
     }
 
-    // Auto-mark as read logic: if we are near the end of the total scrollable area
-    if (_scrollController.position.pixels > _scrollController.position.maxScrollExtent - 200) {
-       final lastChapterUrl = _pages.last.chapterUrl;
-       if (!HistoryDB.isRead(lastChapterUrl)) {
-          HistoryDB.markAsRead(lastChapterUrl, isRead: true);
-       }
-    }
-
-    // Load next chapter logic
+    // Load next chapter logic (Downward)
     if (_scrollController.position.pixels > _scrollController.position.maxScrollExtent - 2000) {
       if (!_isFetchingNext && _currentChapterIndex > 0) {
          _loadNextChapter();
@@ -116,8 +127,12 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     }
   }
 
-  Future<void> _fetchChapter(Chapter chapter) async {
-    setState(() => _isFetchingNext = true);
+  Future<void> _fetchChapter(Chapter chapter, {bool isPrepend = false}) async {
+    if (isPrepend) {
+      setState(() => _isFetchingPrev = true);
+    } else {
+      setState(() => _isFetchingNext = true);
+    }
     try {
       List<ReaderPage> newPages = [];
       if (DownloadDB.isDownloaded(chapter.url)) {
@@ -138,19 +153,77 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
       if (newPages.isEmpty) {
         final parser = getParserForSite(widget.sourceId);
-        final list = await parser.fetchChapterImages(chapter.url);
-        newPages = list.map((url) => ReaderPage(
-          chapterUrl: chapter.url,
-          chapterTitle: chapter.title,
-          url: url,
-        )).toList();
+        try {
+          final list = await parser.fetchChapterImages(chapter.url);
+          newPages = list.map((url) => ReaderPage(
+            chapterUrl: chapter.url,
+            chapterTitle: chapter.title,
+            url: url,
+          )).toList();
+        } catch (e) {
+             debugPrint('Chapter fetch error: $e');
+             if (mounted) {
+               setState(() {
+                 _isLoading = false;
+                 _isFetchingNext = false;
+               });
+               showDialog(
+                 context: context,
+                 builder: (context) => AlertDialog(
+                   title: const Text('Offline'),
+                   content: const Text('This chapter has not been downloaded and cannot be viewed offline.'),
+                   actions: [
+                     TextButton(
+                       onPressed: () => Navigator.pop(context),
+                       child: const Text('OK'),
+                     ),
+                   ],
+                 ),
+               ).then((_) {
+                 if (mounted && _pages.isEmpty) {
+                   Navigator.pop(context);
+                 }
+               });
+             }
+             return;
+        }
       }
 
-      setState(() {
-        _pages.addAll(newPages);
-        _isLoading = false;
-        _isFetchingNext = false;
-      });
+      if (isPrepend) {
+        // Shift existing keys forward
+        final Map<int, GlobalKey> updatedKeys = {};
+        _pageKeys.forEach((k, v) => updatedKeys[k + newPages.length] = v);
+        _pageKeys.clear();
+        _pageKeys.addAll(updatedKeys);
+
+        // Record current height to adjust scroll
+        double oldHeight = 0;
+        if (_scrollController.hasClients) {
+          oldHeight = _scrollController.position.maxScrollExtent;
+        }
+
+        _pages.insertAll(0, newPages);
+        
+        setState(() {
+          _isFetchingPrev = false;
+          _isLoading = false;
+        });
+
+        // Maintain scroll position after prepend
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            final newHeight = _scrollController.position.maxScrollExtent;
+            final addedHeight = newHeight - oldHeight;
+            _scrollController.jumpTo(_scrollController.offset + addedHeight);
+          }
+        });
+      } else {
+        setState(() {
+          _pages.addAll(newPages);
+          _isLoading = false;
+          _isFetchingNext = false;
+        });
+      }
 
       // If this is the initial chapter and we have an initial page/offset, jump to it
       if (chapter.url == widget.allChapters[widget.initialIndex].url && (widget.initialPage > 0 || widget.initialOffset > 0)) {
@@ -165,6 +238,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       setState(() {
          _isLoading = false;
          _isFetchingNext = false;
+         _isFetchingPrev = false;
       });
     }
   }
@@ -198,6 +272,11 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
      _fetchChapter(widget.allChapters[_currentChapterIndex]);
   }
 
+  void _loadPrevChapter() {
+     _currentChapterIndex++; // Previous chapter in a latest-first list
+     _fetchChapter(widget.allChapters[_currentChapterIndex], isPrepend: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -212,19 +291,28 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                   },
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: EdgeInsets.zero, // Remove any default padding
-                    itemCount: _pages.length + (_isFetchingNext ? 1 : 0),
+                    padding: EdgeInsets.zero,
+                    itemCount: _pages.length + (_isFetchingNext ? 1 : 0) + (_isFetchingPrev ? 1 : 0),
                     cacheExtent: 3000,
                     itemBuilder: (context, index) {
-                      if (index == _pages.length) {
+                      if (_isFetchingPrev && index == 0) {
                         return const Padding(
                           padding: EdgeInsets.symmetric(vertical: 40),
                           child: Center(child: CircularProgressIndicator()),
                         );
                       }
                       
-                      final page = _pages[index];
-                      final key = _pageKeys.putIfAbsent(index, () => GlobalKey());
+                      final actualIndex = _isFetchingPrev ? index - 1 : index;
+
+                      if (actualIndex == _pages.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      
+                      final page = _pages[actualIndex];
+                      final key = _pageKeys.putIfAbsent(actualIndex, () => GlobalKey());
 
                       Widget imageWidget;
                       if (page.file != null) {

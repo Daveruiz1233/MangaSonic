@@ -5,6 +5,22 @@ class Manga {
   final String sourceId; // e.g. 'manhuatop'
 
   Manga({required this.title, required this.url, required this.coverUrl, required this.sourceId});
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'url': url,
+    'coverUrl': coverUrl,
+    'sourceId': sourceId,
+  };
+
+  factory Manga.fromMap(Map<dynamic, dynamic> map) {
+    return Manga(
+      title: map['title'],
+      url: map['url'],
+      coverUrl: map['coverUrl'],
+      sourceId: map['sourceId'],
+    );
+  }
 }
 
 class Chapter {
@@ -13,6 +29,20 @@ class Chapter {
   final String mangaUrl;
 
   Chapter({required this.title, required this.url, required this.mangaUrl});
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'url': url,
+    'mangaUrl': mangaUrl,
+  };
+
+  factory Chapter.fromMap(Map<dynamic, dynamic> map) {
+    return Chapter(
+      title: map['title'],
+      url: map['url'],
+      mangaUrl: map['mangaUrl'],
+    );
+  }
 }
 
 class ChapterStatus {
@@ -58,4 +88,26 @@ class MangaDetails {
     required this.chapters,
     required this.suggestions,
   });
+
+  Map<String, dynamic> toMap() => {
+    'description': description,
+    'author': author,
+    'artist': artist,
+    'status': status,
+    'genres': genres,
+    'chapters': chapters.map((c) => c.toMap()).toList(),
+    'suggestions': suggestions.map((s) => s.toMap()).toList(),
+  };
+
+  factory MangaDetails.fromMap(Map<dynamic, dynamic> map) {
+    return MangaDetails(
+      description: map['description'],
+      author: map['author'],
+      artist: map['artist'],
+      status: map['status'],
+      genres: List<String>.from(map['genres']),
+      chapters: (map['chapters'] as List).map((c) => Chapter.fromMap(c)).toList(),
+      suggestions: (map['suggestions'] as List).map((s) => Manga.fromMap(s)).toList(),
+    );
+  }
 }

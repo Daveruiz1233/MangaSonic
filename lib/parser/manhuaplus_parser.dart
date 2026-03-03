@@ -100,7 +100,7 @@ class ManhuaPlusParser extends BaseParser {
     final response = await getRequest(mangaUrl);
     final document = parser.parse(response.body);
     
-    final chapterElements = document.querySelectorAll('.row .chapter a');
+    final chapterElements = document.querySelectorAll('#nt_listchapter .chapter a');
     
     List<Chapter> chapters = [];
     for (var element in chapterElements) {
