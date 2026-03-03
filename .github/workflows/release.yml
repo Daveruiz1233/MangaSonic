@@ -3,19 +3,38 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+permissions:
+  contents: write
 
 jobs:
-  build-android:
-    name: Build Android APK
-    runs-on: ubuntu-latest
+  build-and-release:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: android
+            artifact_name: app-release.apk
+            artifact_path: build/app/outputs/flutter-apk/app-release.apk
+          - os: macos-latest
+            platform: ios
+            artifact_name: ios-release.ipa
+            artifact_path: build/ios/ipa/*.ipa
+          - os: windows-latest
+            platform: windows
+            artifact_name: windows-release.zip
+            artifact_path: build/windows/x64/runner/Release/*
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Java (Android only)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -25,72 +44,36 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Install Dependencies
+      - name: Flutter Pub Get
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build Android APK
+        if: matrix.platform == 'android'
         run: flutter build apk --release
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release.apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-
-  build-ios:
-    name: Build iOS IPA (Unsigned)
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build iOS App
-        run: flutter build ios --release --no-codesign
-
-      - name: Package IPA
+      - name: Build Windows EXE
+        if: matrix.platform == 'windows'
         run: |
+          flutter build windows --release
+          cd build/windows/x64/runner/Release/
+          Compress-Archive -Path * -DestinationPath ../../../../../windows-release.zip
+
+      - name: Build iOS IPA
+        if: matrix.platform == 'ios'
+        run: |
+          # Note: Creating an IPA usually requires a signing certificate and provisioning profile.
+          # This builds an unsigned app payload as a fallback if signing isn't configured.
+          flutter build ios --release --no-codesign
           mkdir -p Payload
           mv build/ios/iphoneos/Runner.app Payload/
-          zip -r manga_sonic_ios_unsigned.ipa Payload
+          zip -r ios-release.ipa Payload/
 
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+      - name: Release Artifacts
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: manga_sonic_ios_unsigned.ipa
-          path: manga_sonic_ios_unsigned.ipa
-
-  create-release:
-    name: Create GitHub Release
-    needs: [build-android, build-ios]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download APK
-        uses: actions/download-artifact@v4
-        with:
-          name: app-release.apk
-          
-      - name: Download IPA
-        uses: actions/download-artifact@v4
-        with:
-          name: manga_sonic_ios_unsigned.ipa
-          
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
           files: |
-            app-release.apk
-            manga_sonic_ios_unsigned.ipa
+            ${{ matrix.platform == 'windows' && 'windows-release.zip' || matrix.artifact_path }}
+            ${{ matrix.platform == 'ios' && 'ios-release.ipa' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
