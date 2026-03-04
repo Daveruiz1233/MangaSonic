@@ -32,26 +32,25 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   late ScrollController _scrollController;
   final GlobalKey _centerKey = GlobalKey();
 
-  // Forward pages = initial chapter + next chapters (scroll down)
-  // Backward pages = previous chapters (scroll up)
+  // Forward pages = target page + rest of chapter + next chapters (scroll down)
+  // Backward pages = pages before target + previous chapters (scroll up)
   final List<ReaderPage> _forwardPages = [];
   final List<ReaderPage> _backwardPages = [];
 
   bool _isLoading = true;
-  bool _showUI = true;
   bool _isFetchingNext = false;
   bool _isFetchingPrev = false;
 
-  int _topChapterIndex = 0; // tracks upward (previous) chapter loading
-  int _bottomChapterIndex = 0; // tracks downward (next) chapter loading
+  int _topChapterIndex = 0;
+  int _bottomChapterIndex = 0;
 
-  // Progress tracking
+  // Progress tracking — uses ValueNotifier so updates DON'T rebuild the
+  // CustomScrollView. Only the overlay widgets listening to these rebuild.
+  final ValueNotifier<String> _chapterTitleNotifier = ValueNotifier('');
+  final ValueNotifier<String> _pageInfoNotifier = ValueNotifier('');
+  final ValueNotifier<bool> _showUINotifier = ValueNotifier(true);
+
   DateTime _lastSaveTime = DateTime.now();
-  String _currentChapterTitle = '';
-  int _currentPageInChapter = 0;
-  int _currentChapterTotalPages = 0;
-
-  // Track loaded chapter URLs to avoid duplicates
   final Set<String> _loadedChapterUrls = {};
 
   @override
@@ -59,10 +58,8 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     super.initState();
     _topChapterIndex = widget.initialIndex;
     _bottomChapterIndex = widget.initialIndex;
-    _currentChapterTitle = widget.allChapters[widget.initialIndex].title;
+    _chapterTitleNotifier.value = widget.allChapters[widget.initialIndex].title;
 
-    // No initialScrollOffset needed — the target page will be placed at
-    // the start of the forward sliver (offset 0) by _fetchInitialChapter.
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
 
@@ -73,6 +70,9 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _chapterTitleNotifier.dispose();
+    _pageInfoNotifier.dispose();
+    _showUINotifier.dispose();
     super.dispose();
   }
 
@@ -80,13 +80,11 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
   void _onScroll() {
     if (_forwardPages.isEmpty && _backwardPages.isEmpty) return;
-
     _trackProgress();
     _checkLoadThresholds();
   }
 
   void _trackProgress() {
-    // Throttle to 500ms
     final now = DateTime.now();
     if (now.difference(_lastSaveTime) < const Duration(milliseconds: 500)) {
       return;
@@ -96,7 +94,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     bool foundVisible = false;
 
     // Check backward pages (furthest up → closest to center)
-    // Backward sliver renders index 0 closest to center, last index furthest up.
     for (int i = _backwardPages.length - 1; i >= 0 && !foundVisible; i--) {
       final page = _backwardPages[i];
       if (page.isSeparator) continue;
@@ -105,10 +102,9 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.hasSize) continue;
       final pos = box.localToGlobal(Offset.zero);
-      final top = pos.dy;
-      final bottom = top + box.size.height;
       foundVisible = _processPageForTracking(
-        page, top, bottom, isForward: false, localIndex: i,
+        page, pos.dy, pos.dy + box.size.height,
+        isForward: false, localIndex: i,
       );
     }
 
@@ -121,47 +117,37 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.hasSize) continue;
       final pos = box.localToGlobal(Offset.zero);
-      final top = pos.dy;
-      final bottom = top + box.size.height;
       foundVisible = _processPageForTracking(
-        page, top, bottom, isForward: true, localIndex: i,
+        page, pos.dy, pos.dy + box.size.height,
+        isForward: true, localIndex: i,
       );
     }
   }
 
-  /// Process a single page for progress tracking.
-  /// Returns true if this was the first visible page (stop iteration).
   bool _processPageForTracking(
     ReaderPage page, double top, double bottom, {
     required bool isForward, required int localIndex,
   }) {
-    // Mark-as-read: if last page of a chapter has scrolled fully off screen
     if (bottom < 0) {
       bool isLastOfChapter;
       if (isForward) {
         isLastOfChapter = localIndex == _forwardPages.length - 1 ||
             _forwardPages[localIndex + 1].chapterUrl != page.chapterUrl;
       } else {
-        // Index 0 in backward = closest to center = last page visually
         isLastOfChapter = localIndex == 0 ||
             _backwardPages[localIndex - 1].chapterUrl != page.chapterUrl;
       }
       if (isLastOfChapter && !HistoryDB.isRead(page.chapterUrl)) {
         HistoryDB.markAsRead(page.chapterUrl, isRead: true);
       }
-      return false; // keep looking
+      return false;
     }
 
-    // First visible page
     if (bottom > 10) {
       final offsetWithinPage = top < 0 ? top.abs() : 0.0;
 
-      // Calculate page index within its own chapter (skip separators).
-      // Pages from the same chapter may be split across both slivers
-      // (backward has pages before the restore point, forward has the rest).
       int pageIndexInChapter = 0;
       if (isForward) {
-        // Count same-chapter pages before this one in the forward list
         for (int k = localIndex - 1; k >= 0; k--) {
           final p = _forwardPages[k];
           if (p.isSeparator) continue;
@@ -171,9 +157,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
             break;
           }
         }
-        // If we reached the start of the forward list AND there are
-        // backward pages from the same chapter, count those too.
-        // (This happens when the initial chapter was split at the restore point.)
+        // Count same-chapter pages in backward sliver too (split initial chapter)
         if (localIndex == 0 ||
             (localIndex > 0 && _forwardPages[0].chapterUrl == page.chapterUrl)) {
           for (final p in _backwardPages) {
@@ -184,7 +168,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           }
         }
       } else {
-        // Backward pages: higher index = earlier page in reading order
         for (int k = localIndex + 1; k < _backwardPages.length; k++) {
           final p = _backwardPages[k];
           if (p.isSeparator) continue;
@@ -196,7 +179,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
         }
       }
 
-      // Count total non-separator pages in this chapter
       int totalPages = 0;
       for (final p in _backwardPages) {
         if (!p.isSeparator && p.chapterUrl == page.chapterUrl) totalPages++;
@@ -205,18 +187,16 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
         if (!p.isSeparator && p.chapterUrl == page.chapterUrl) totalPages++;
       }
 
-      _currentChapterTitle = page.chapterTitle;
-      _currentPageInChapter = pageIndexInChapter;
-      _currentChapterTotalPages = totalPages;
+      // Update notifiers — these do NOT trigger a CustomScrollView rebuild
+      _chapterTitleNotifier.value = page.chapterTitle;
+      _pageInfoNotifier.value = '${pageIndexInChapter + 1} / $totalPages';
 
       HistoryDB.saveProgress(
         page.chapterUrl,
         pageIndexInChapter,
         lastPageOffset: offsetWithinPage,
       );
-
-      if (mounted) setState(() {});
-      return true; // found first visible, stop
+      return true;
     }
 
     return false;
@@ -226,8 +206,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
 
-    // Load previous chapter (scrolling up into negative extent)
-    // minScrollExtent is negative for backward slivers
     if (pos.pixels < pos.minScrollExtent + 3000) {
       if (!_isFetchingPrev &&
           _topChapterIndex < widget.allChapters.length - 1) {
@@ -235,7 +213,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       }
     }
 
-    // Load next chapter (scrolling down)
     if (pos.pixels > pos.maxScrollExtent - 3000) {
       if (!_isFetchingNext && _bottomChapterIndex > 0) {
         _loadNextChapter();
@@ -252,25 +229,16 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
     _loadedChapterUrls.add(chapter.url);
 
-    // Split pages at the target page index:
-    // - Pages BEFORE the target go into the backward sliver (grow upward,
-    //   their height changes can never affect the viewport position).
-    // - Pages FROM the target onward go into the forward sliver (start
-    //   at scroll offset 0, so the target page is immediately visible).
+    // Split at target page: before → backward sliver, from target → forward sliver
     final splitIndex = widget.initialPage.clamp(0, pages.length);
 
-    // Pages before target go into backward sliver (reversed so index 0 = closest to center)
     if (splitIndex > 0) {
-      final beforePages = pages.sublist(0, splitIndex);
-      _backwardPages.addAll(beforePages.reversed);
+      _backwardPages.addAll(pages.sublist(0, splitIndex).reversed);
     }
-
-    // Pages from target onward go into forward sliver
     _forwardPages.addAll(pages.sublist(splitIndex));
 
     setState(() => _isLoading = false);
 
-    // Apply sub-page offset (how far into the target page the user was)
     if (widget.initialOffset > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scrollController.hasClients) {
@@ -281,14 +249,12 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       });
     }
 
-    // Prefetch adjacent chapters in background
     _prefetchAdjacentChapters();
   }
 
   Future<List<ReaderPage>?> _fetchChapterPages(Chapter chapter) async {
     List<ReaderPage> pages = [];
 
-    // Check downloaded/offline first
     if (DownloadDB.isDownloaded(chapter.url)) {
       final download = DownloadDB.getDownload(chapter.url);
       if (download != null) {
@@ -297,57 +263,44 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           final files = dir.listSync().whereType<File>().toList();
           files.sort((a, b) => a.path.compareTo(b.path));
           pages = files
-              .map(
-                (f) => ReaderPage(
-                  chapterUrl: chapter.url,
-                  chapterTitle: chapter.title,
-                  file: f,
-                ),
-              )
+              .map((f) => ReaderPage(
+                    chapterUrl: chapter.url,
+                    chapterTitle: chapter.title,
+                    file: f,
+                  ))
               .toList();
         }
       }
     }
 
-    // Fetch from network if no offline pages
     if (pages.isEmpty) {
       final parser = getParserForSite(widget.sourceId);
       try {
         final urls = await parser.fetchChapterImages(chapter.url);
         pages = urls
-            .map(
-              (url) => ReaderPage(
-                chapterUrl: chapter.url,
-                chapterTitle: chapter.title,
-                url: url,
-              ),
-            )
+            .map((url) => ReaderPage(
+                  chapterUrl: chapter.url,
+                  chapterTitle: chapter.title,
+                  url: url,
+                ))
             .toList();
       } catch (e) {
         debugPrint('Chapter fetch error: $e');
-        if (mounted) {
-          _showOfflineDialog();
-        }
+        if (mounted) _showOfflineDialog();
         return null;
       }
     }
 
-    // Warm the image cache for network images
     for (int i = 0; i < pages.length && i < 5; i++) {
       final url = pages[i].url;
       if (url != null) {
-        _precacheImage(url);
+        try {
+          CachedNetworkImageProvider(url).resolve(ImageConfiguration.empty);
+        } catch (_) {}
       }
     }
 
     return pages;
-  }
-
-  void _precacheImage(String url) {
-    try {
-      // Trigger CachedNetworkImageProvider to start downloading
-      CachedNetworkImageProvider(url).resolve(ImageConfiguration.empty);
-    } catch (_) {}
   }
 
   void _showOfflineDialog() {
@@ -372,22 +325,20 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     });
   }
 
-  void _loadNextChapter({bool isBackground = false}) {
+  void _loadNextChapter() {
     if (_isFetchingNext) return;
-    final nextIndex = _bottomChapterIndex - 1; // latest-first list
+    final nextIndex = _bottomChapterIndex - 1;
     if (nextIndex < 0) return;
     final chapter = widget.allChapters[nextIndex];
     if (_loadedChapterUrls.contains(chapter.url)) return;
 
     _isFetchingNext = true;
-    if (!isBackground && mounted) setState(() {});
 
     _fetchChapterPages(chapter).then((pages) {
       if (pages != null && pages.isNotEmpty && mounted) {
         _loadedChapterUrls.add(chapter.url);
         _bottomChapterIndex = nextIndex;
 
-        // Add a chapter separator page before the new chapter
         final separator = ReaderPage(
           chapterUrl: chapter.url,
           chapterTitle: chapter.title,
@@ -400,69 +351,56 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           _isFetchingNext = false;
         });
       } else if (mounted) {
-        setState(() => _isFetchingNext = false);
+        _isFetchingNext = false;
       }
     });
   }
 
-  void _loadPrevChapter({bool isBackground = false}) {
+  void _loadPrevChapter() {
     if (_isFetchingPrev) return;
-    final prevIndex = _topChapterIndex + 1; // latest-first list
+    final prevIndex = _topChapterIndex + 1;
     if (prevIndex >= widget.allChapters.length) return;
     final chapter = widget.allChapters[prevIndex];
     if (_loadedChapterUrls.contains(chapter.url)) return;
 
     _isFetchingPrev = true;
-    if (!isBackground && mounted) setState(() {});
 
     _fetchChapterPages(chapter).then((pages) {
       if (pages != null && pages.isNotEmpty && mounted) {
         _loadedChapterUrls.add(chapter.url);
         _topChapterIndex = prevIndex;
 
-        // Add a chapter separator at the beginning (boundary between chapters)
         final separator = ReaderPage(
           chapterUrl: chapter.url,
           chapterTitle: chapter.title,
           isSeparator: true,
         );
 
-        // Backward pages are rendered in reverse by the sliver, so:
-        // index 0 = closest to center, last index = furthest up.
-        // We want the new chapter pages to appear above existing backward pages.
-        // New chapter's pages should be: page1, page2, ..., pageN, separator
-        // Since sliver reverses: we insert at the END so they appear at the TOP.
         setState(() {
           _backwardPages.addAll(pages.reversed);
           _backwardPages.add(separator);
           _isFetchingPrev = false;
         });
       } else if (mounted) {
-        setState(() => _isFetchingPrev = false);
+        _isFetchingPrev = false;
       }
     });
   }
 
   void _prefetchAdjacentChapters() {
-    // Prefetch next chapter data (not images, just page list)
     if (_bottomChapterIndex > 0) {
       final nextChapter = widget.allChapters[_bottomChapterIndex - 1];
       if (DownloadDB.isDownloaded(nextChapter.url)) {
-        _loadNextChapter(isBackground: true);
+        _loadNextChapter();
       }
     }
     if (_topChapterIndex < widget.allChapters.length - 1) {
       final prevChapter = widget.allChapters[_topChapterIndex + 1];
       if (DownloadDB.isDownloaded(prevChapter.url)) {
-        _loadPrevChapter(isBackground: true);
+        _loadPrevChapter();
       }
     }
   }
-
-  // Position restore is handled by splitting pages in _fetchInitialChapter:
-  // pages before the target go into the backward sliver (can't affect viewport),
-  // pages from the target onward go into the forward sliver (start at offset 0).
-  // Only the sub-page offset needs a single jumpTo after the first frame.
 
   // ─── BUILD ─────────────────────────────────────────────────────────────
 
@@ -474,15 +412,15 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
+                // ── The scroll view — ONLY rebuilds when pages are added ──
                 GestureDetector(
-                  onTap: () => setState(() => _showUI = !_showUI),
+                  onTap: () => _showUINotifier.value = !_showUINotifier.value,
                   child: CustomScrollView(
                     controller: _scrollController,
                     center: _centerKey,
                     cacheExtent: 6000,
                     physics: const ClampingScrollPhysics(),
                     slivers: [
-                      // ── Backward sliver (previous chapters, grows upward) ──
                       SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
@@ -490,10 +428,14 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                             return _buildPageWidget(_backwardPages[index]);
                           },
                           childCount: _backwardPages.length,
+                          findChildIndexCallback: (Key key) {
+                            final idx = _backwardPages.indexWhere(
+                              (p) => p.key == key,
+                            );
+                            return idx >= 0 ? idx : null;
+                          },
                         ),
                       ),
-
-                      // ── Forward sliver (initial + next chapters, grows downward) ──
                       SliverList(
                         key: _centerKey,
                         delegate: SliverChildBuilderDelegate(
@@ -502,115 +444,88 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                             return _buildPageWidget(_forwardPages[index]);
                           },
                           childCount: _forwardPages.length,
+                          findChildIndexCallback: (Key key) {
+                            final idx = _forwardPages.indexWhere(
+                              (p) => p.key == key,
+                            );
+                            return idx >= 0 ? idx : null;
+                          },
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // ── Top AppBar overlay ──
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: AnimatedOpacity(
-                    opacity: _showUI ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: IgnorePointer(
-                      ignoring: !_showUI,
-                      child: AppBar(
-                        title: Text(_currentChapterTitle),
-                        backgroundColor: Colors.black.withValues(alpha: 0.7),
-                        elevation: 0,
-                        leading: IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // ── Page indicator at bottom ──
-                if (_currentChapterTotalPages > 0)
-                  Positioned(
-                    bottom: 16,
+                // ── Overlays use ValueListenableBuilder — never rebuild slivers ──
+                ValueListenableBuilder<bool>(
+                  valueListenable: _showUINotifier,
+                  builder: (context, showUI, _) => Positioned(
+                    top: 0,
                     left: 0,
                     right: 0,
                     child: AnimatedOpacity(
-                      opacity: _showUI ? 1.0 : 0.0,
+                      opacity: showUI ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 200),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            '${_currentPageInChapter + 1} / $_currentChapterTotalPages',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
+                      child: IgnorePointer(
+                        ignoring: !showUI,
+                        child: ValueListenableBuilder<String>(
+                          valueListenable: _chapterTitleNotifier,
+                          builder: (context, title, _) => AppBar(
+                            title: Text(title),
+                            backgroundColor:
+                                Colors.black.withValues(alpha: 0.7),
+                            elevation: 0,
+                            leading: IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              onPressed: () => Navigator.of(context).pop(),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
+                ),
 
-                // ── Loading indicator for previous chapter ──
-                if (_isFetchingPrev)
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 60,
+                // ── Page indicator ──
+                ValueListenableBuilder<bool>(
+                  valueListenable: _showUINotifier,
+                  builder: (context, showUI, _) => Positioned(
+                    bottom: 16,
                     left: 0,
                     right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                    child: AnimatedOpacity(
+                      opacity: showUI ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Center(
+                        child: ValueListenableBuilder<String>(
+                          valueListenable: _pageInfoNotifier,
+                          builder: (context, pageInfo, _) {
+                            if (pageInfo.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                pageInfo,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
-
-                // ── Loading indicator for next chapter ──
-                if (_isFetchingNext)
-                  Positioned(
-                    bottom: 40,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                ),
               ],
             ),
     );
@@ -618,57 +533,147 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
   Widget _buildPageWidget(ReaderPage page) {
     if (page.isSeparator) {
-      return _buildChapterSeparator(page.chapterTitle);
-    }
-
-    Widget imageWidget;
-    if (page.file != null) {
-      imageWidget = Image.file(
-        page.file!,
-        fit: BoxFit.contain,
-        width: double.infinity,
-        cacheWidth: 1200,
-        errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
-      );
-    } else {
-      imageWidget = CachedNetworkImage(
-        imageUrl: page.url!,
-        fit: BoxFit.contain,
-        width: double.infinity,
-        memCacheWidth: 1200,
-        fadeInDuration: const Duration(milliseconds: 100),
-        placeholderFadeInDuration: Duration.zero,
-        placeholder: (context, url) => _placeholder(),
-        errorWidget: (context, url, error) => _errorPlaceholder(),
+      return Container(
+        height: 80,
+        color: Colors.grey[900],
+        child: Center(
+          child: Text(
+            page.chapterTitle,
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       );
     }
 
     return RepaintBoundary(
       key: page.key,
-      child: imageWidget,
+      child: _StableImage(page: page),
+    );
+  }
+}
+
+/// Prevents viewport shifts by locking height once the image's aspect ratio
+/// is known. While loading, shows a fixed 600px placeholder. When the image
+/// decodes, captures its real dimensions and constrains the SizedBox to the
+/// exact height — the transition happens in ONE frame with no intermediate
+/// relayout that could push other items around.
+class _StableImage extends StatefulWidget {
+  final ReaderPage page;
+  const _StableImage({required this.page});
+
+  @override
+  State<_StableImage> createState() => _StableImageState();
+}
+
+class _StableImageState extends State<_StableImage> {
+  double? _aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+
+        if (_aspectRatio != null) {
+          final height = width / _aspectRatio!;
+          return SizedBox(
+            width: width,
+            height: height,
+            child: _buildImage(),
+          );
+        }
+
+        return SizedBox(
+          width: width,
+          height: 600,
+          child: _buildImageWithSizeDetection(width),
+        );
+      },
     );
   }
 
-  Widget _buildChapterSeparator(String title) {
-    return Container(
-      height: 80,
-      color: Colors.grey[900],
-      child: Center(
-        child: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+  Widget _buildImage() {
+    if (widget.page.file != null) {
+      return Image.file(
+        widget.page.file!,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        cacheWidth: 1200,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _errorWidget(),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: widget.page.url!,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      memCacheWidth: 1200,
+      fadeInDuration: Duration.zero,
+      placeholderFadeInDuration: Duration.zero,
+      placeholder: (_, __) => const SizedBox.shrink(),
+      errorWidget: (_, __, ___) => _errorWidget(),
     );
   }
 
-  Widget _placeholder() {
+  Widget _buildImageWithSizeDetection(double availableWidth) {
+    if (widget.page.file != null) {
+      return Image.file(
+        widget.page.file!,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        cacheWidth: 1200,
+        gaplessPlayback: true,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (frame != null) {
+            _resolveSize(FileImage(widget.page.file!), availableWidth);
+          }
+          return frame != null ? child : _loadingWidget();
+        },
+        errorBuilder: (_, __, ___) => _errorWidget(),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: widget.page.url!,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      memCacheWidth: 1200,
+      fadeInDuration: Duration.zero,
+      placeholderFadeInDuration: Duration.zero,
+      imageBuilder: (context, imageProvider) {
+        _resolveSize(imageProvider, availableWidth);
+        return Image(
+          image: imageProvider,
+          fit: BoxFit.contain,
+          width: double.infinity,
+        );
+      },
+      placeholder: (_, __) => _loadingWidget(),
+      errorWidget: (_, __, ___) => _errorWidget(),
+    );
+  }
+
+  void _resolveSize(ImageProvider provider, double availableWidth) {
+    if (_aspectRatio != null) return;
+    final stream = provider.resolve(const ImageConfiguration());
+    late ImageStreamListener listener;
+    listener = ImageStreamListener((info, _) {
+      final w = info.image.width.toDouble();
+      final h = info.image.height.toDouble();
+      if (w > 0 && h > 0 && mounted) {
+        setState(() => _aspectRatio = w / h);
+      }
+      stream.removeListener(listener);
+    });
+    stream.addListener(listener);
+  }
+
+  Widget _loadingWidget() {
     return Container(
-      height: 600,
       color: Colors.grey[900],
       child: const Center(
         child: SizedBox(
@@ -683,9 +688,8 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     );
   }
 
-  Widget _errorPlaceholder() {
+  Widget _errorWidget() {
     return Container(
-      height: 400,
       color: Colors.grey[900],
       child: const Center(
         child: Icon(Icons.broken_image, color: Colors.white38),
