@@ -4,7 +4,8 @@ import 'base_parser.dart';
 import 'dart:convert';
 
 class AsuraComicParser extends BaseParser {
-  AsuraComicParser() : super(siteName: 'AsuraComic', baseUrl: 'https://asuracomic.net');
+  AsuraComicParser()
+    : super(siteName: 'AsuraComic', baseUrl: 'https://asuracomic.net');
 
   /// Finds the main manga grid container by checking for the distinctive
   /// class combination: grid-cols-2 + md:grid-cols-5 + gap-3 + p-4.
@@ -13,7 +14,9 @@ class AsuraComicParser extends BaseParser {
     final divs = document.querySelectorAll('div');
     for (var div in divs) {
       final cl = div.className.toString();
-      if (cl.contains('md:grid-cols-5') && cl.contains('gap-3') && cl.contains('p-4')) {
+      if (cl.contains('md:grid-cols-5') &&
+          cl.contains('gap-3') &&
+          cl.contains('p-4')) {
         return div;
       }
     }
@@ -49,8 +52,16 @@ class AsuraComicParser extends BaseParser {
         for (var s in spans) {
           final t = s.text.trim();
           if (t.isEmpty) continue;
-          if (t == 'MANHWA' || t == 'MANHUA' || t == 'MANGA' || t == 'MANGATOON') continue;
-          if (t == 'Ongoing' || t == 'Completed' || t == 'Hiatus' || t == 'Dropped') continue;
+          if (t == 'MANHWA' ||
+              t == 'MANHUA' ||
+              t == 'MANGA' ||
+              t == 'MANGATOON')
+            continue;
+          if (t == 'Ongoing' ||
+              t == 'Completed' ||
+              t == 'Hiatus' ||
+              t == 'Dropped')
+            continue;
           final cl = s.className.toString();
           if (cl.contains('font-bold') || cl.contains('font-[600]')) {
             title = t;
@@ -63,9 +74,17 @@ class AsuraComicParser extends BaseParser {
 
       // Cover image
       final img = aTag.querySelector('img');
-      final coverUrl = img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
+      final coverUrl =
+          img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
 
-      list.add(Manga(title: title, url: url, coverUrl: coverUrl, sourceId: 'asuracomic'));
+      list.add(
+        Manga(
+          title: title,
+          url: url,
+          coverUrl: coverUrl,
+          sourceId: 'asuracomic',
+        ),
+      );
     }
 
     return list;
@@ -112,11 +131,15 @@ class AsuraComicParser extends BaseParser {
       if (h3s.isNotEmpty) {
         chapterName = h3s.first.text.trim();
       } else {
-        chapterName = element.text.trim().replaceAll(RegExp(r'\s+'), ' ').trim();
+        chapterName = element.text
+            .trim()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
       }
 
       // Skip promotional buttons ("First Chapter", "New Chapter")
-      if (chapterName == 'First Chapter' || chapterName == 'New Chapter') continue;
+      if (chapterName == 'First Chapter' || chapterName == 'New Chapter')
+        continue;
 
       // Skip if chapter name is empty
       if (chapterName.isEmpty) continue;
@@ -141,7 +164,8 @@ class AsuraComicParser extends BaseParser {
     for (var span in spans) {
       if (span.classes.any((c) => c.contains('text-[#A2A2A2]'))) {
         final t = span.text.trim();
-        if (t.length > 20) { // Avoid short labels
+        if (t.length > 20) {
+          // Avoid short labels
           description = t;
           break;
         }
@@ -157,18 +181,22 @@ class AsuraComicParser extends BaseParser {
     for (var i = 0; i < h3s.length; i++) {
       final text = h3s[i].text.trim().toLowerCase();
       if (text == 'author' && i + 1 < h3s.length) {
-        author = h3s[i+1].text.trim();
+        author = h3s[i + 1].text.trim();
       } else if (text == 'artist' && i + 1 < h3s.length) {
-        artist = h3s[i+1].text.trim();
+        artist = h3s[i + 1].text.trim();
       } else if (text == 'status') {
-         final container = h3s[i].parent;
-         if (container != null) {
-           final val = container.querySelectorAll('h3').firstWhere(
-             (e) => e != h3s[i],
-             orElse: () => document.createElement('h3'),
-           ).text.trim();
-           if (val.isNotEmpty) status = val;
-         }
+        final container = h3s[i].parent;
+        if (container != null) {
+          final val = container
+              .querySelectorAll('h3')
+              .firstWhere(
+                (e) => e != h3s[i],
+                orElse: () => document.createElement('h3'),
+              )
+              .text
+              .trim();
+          if (val.isNotEmpty) status = val;
+        }
       }
     }
     if (author == '_') author = 'Unknown';
@@ -189,16 +217,26 @@ class AsuraComicParser extends BaseParser {
     List<Manga> suggestions = [];
     final asideLinks = document.querySelectorAll('aside a[href*="series/"]');
     for (var element in asideLinks) {
-       final href = element.attributes['href'] ?? '';
-       final url = Uri.parse(baseUrl).resolve(href).toString();
-       final title = element.querySelector('span.font-bold')?.text.trim() ?? '';
-       final img = element.querySelector('img');
-       final coverUrl = img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
-       
-       if (title.isNotEmpty && !suggestions.any((m) => m.url == url) && url != manga.url) {
-         suggestions.add(Manga(title: title, url: url, coverUrl: coverUrl, sourceId: 'asuracomic'));
-       }
-       if (suggestions.length >= 6) break;
+      final href = element.attributes['href'] ?? '';
+      final url = Uri.parse(baseUrl).resolve(href).toString();
+      final title = element.querySelector('span.font-bold')?.text.trim() ?? '';
+      final img = element.querySelector('img');
+      final coverUrl =
+          img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
+
+      if (title.isNotEmpty &&
+          !suggestions.any((m) => m.url == url) &&
+          url != manga.url) {
+        suggestions.add(
+          Manga(
+            title: title,
+            url: url,
+            coverUrl: coverUrl,
+            sourceId: 'asuracomic',
+          ),
+        );
+      }
+      if (suggestions.length >= 6) break;
     }
 
     return MangaDetails(
@@ -262,4 +300,3 @@ class _NumberedImage {
   final String url;
   _NumberedImage(this.pageNumber, this.url);
 }
-

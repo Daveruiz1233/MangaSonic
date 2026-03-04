@@ -29,19 +29,23 @@ abstract class BaseParser {
   Future<http.Response> getRequest(String url) async {
     final response = await client.get(
       Uri.parse(url),
-      headers: {
-        ...CloudflareInterceptor.headers,
-      },
+      headers: {...CloudflareInterceptor.headers},
     );
-    
+
     if (response.statusCode == 403 || response.statusCode == 429) {
-      throw Exception('Cloudflare block detected (Status ${response.statusCode})');
+      throw Exception(
+        'Cloudflare block detected (Status ${response.statusCode})',
+      );
     }
-    
+
     return response;
   }
 
-  Future<http.Response> postRequest(String url, {Object? body, Map<String, String>? headers}) async {
+  Future<http.Response> postRequest(
+    String url, {
+    Object? body,
+    Map<String, String>? headers,
+  }) async {
     final response = await client.post(
       Uri.parse(url),
       headers: {
@@ -50,11 +54,13 @@ abstract class BaseParser {
       },
       body: body,
     );
-    
+
     if (response.statusCode == 403 || response.statusCode == 429) {
-      throw Exception('Cloudflare block detected (Status ${response.statusCode})');
+      throw Exception(
+        'Cloudflare block detected (Status ${response.statusCode})',
+      );
     }
-    
+
     return response;
   }
 }

@@ -6,12 +6,14 @@ void main() async {
   // Wait for home screen
   await Future.delayed(Duration(seconds: 3));
   // Switch to Downloads tab (index 2 in bottom nav bar assume)
-  final downloadsIcon = find.byType('Icon'); // Need better finder, but we don't have tooltips. Let's just find "Downloads".
+  final downloadsIcon = find.byType(
+    'Icon',
+  ); // Need better finder, but we don't have tooltips. Let's just find "Downloads".
   final downloadsText = find.text('Downloads');
   try {
     await driver.tap(downloadsText);
     print('Tapped Downloads tab');
-  } catch(e) {
+  } catch (e) {
     print('Could not find Downloads tab text, trying library');
     final libText = find.text('Library');
     await driver.tap(libText);

@@ -7,7 +7,8 @@ class PalettePersonalizerScreen extends StatefulWidget {
   const PalettePersonalizerScreen({super.key});
 
   @override
-  State<PalettePersonalizerScreen> createState() => _PalettePersonalizerScreenState();
+  State<PalettePersonalizerScreen> createState() =>
+      _PalettePersonalizerScreenState();
 }
 
 class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
@@ -38,14 +39,12 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
     final themeService = context.watch<ThemeService>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Palette Personalizer'),
-      ),
+      appBar: AppBar(title: const Text('Palette Personalizer')),
       body: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 20),
-            
+
             // Mode Selector
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -70,7 +69,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 },
               ),
             ),
-            
+
             const SizedBox(height: 20),
             // Color Wheel
             Padding(
@@ -86,9 +85,9 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 pickerAreaBorderRadius: BorderRadius.circular(200),
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            
+
             // Preview
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -102,12 +101,12 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Preview:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 20),
-                    _ColorPreviewCircle(
-                      color: _accentColor, 
-                      bgColor: _bgColor,
+                    const Text(
+                      'Preview:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(width: 20),
+                    _ColorPreviewCircle(color: _accentColor, bgColor: _bgColor),
                   ],
                 ),
               ),
@@ -121,7 +120,9 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _accentColor,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
                 ),
                 onPressed: () {
                   themeService.setPrimaryColor(_accentColor);
@@ -130,10 +131,17 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                     const SnackBar(content: Text('Theme updated!')),
                   );
                 },
-                child: Text('Confirm Theme', style: TextStyle(
-                  color: ThemeData.estimateBrightnessForColor(_accentColor) == Brightness.dark ? Colors.white : Colors.black, 
-                  fontWeight: FontWeight.bold
-                )),
+                child: Text(
+                  'Confirm Theme',
+                  style: TextStyle(
+                    color:
+                        ThemeData.estimateBrightnessForColor(_accentColor) ==
+                            Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
 
@@ -163,14 +171,14 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 const Color(0xFF880E4F),
               ]),
             ] else ...[
-               _buildPresetSection('Dark Modes', [
+              _buildPresetSection('Dark Modes', [
                 const Color(0xFF121212), // Standard Material Dark
                 const Color(0xFF000000), // AMOLED Black
                 const Color(0xFF1C1C1E), // iOS Dark
                 const Color(0xFF0F172A), // Slate Dark
                 const Color(0xFF18181B), // Zinc Dark
               ]),
-               _buildPresetSection('Deep Tones', [
+              _buildPresetSection('Deep Tones', [
                 const Color(0xFF1A237E), // Deep Indigo
                 const Color(0xFF311B92), // Deep Purple
                 const Color(0xFF004D40), // Deep Teal
@@ -193,7 +201,14 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
         ),
         SizedBox(
           height: 60,
@@ -218,7 +233,9 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                     color: colors[index],
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: currentColor == colors[index] ? Colors.white : Colors.transparent,
+                      color: currentColor == colors[index]
+                          ? Colors.white
+                          : Colors.transparent,
                       width: 2,
                     ),
                   ),
@@ -246,7 +263,9 @@ class _ColorPreviewCircle extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         border: Border.all(
-          color: color.computeLuminance() > 0.5 ? Colors.black26 : Colors.white24,
+          color: color.computeLuminance() > 0.5
+              ? Colors.black26
+              : Colors.white24,
           width: 1,
         ),
         boxShadow: [

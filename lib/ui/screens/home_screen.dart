@@ -60,7 +60,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, ThemeData theme) {
+  Widget _buildNavItem(
+    IconData icon,
+    String label,
+    int index,
+    ThemeData theme,
+  ) {
     final isSelected = _currentIndex == index;
     final color = isSelected ? theme.primaryColor : Colors.grey;
 
@@ -110,19 +115,21 @@ class SiteListTab extends StatelessWidget {
 
   final List<Map<String, String>> sites = const [
     {
-      'name': 'ManhuaTop', 
+      'name': 'ManhuaTop',
       'url': 'https://manhuatop.org/',
-      'logoUrl': 'https://www.google.com/s2/favicons?domain=manhuatop.org&sz=128'
+      'logoUrl':
+          'https://www.google.com/s2/favicons?domain=manhuatop.org&sz=128',
     },
     {
-      'name': 'AsuraComic', 
+      'name': 'AsuraComic',
       'url': 'https://asuracomic.net/',
-      'logoUrl': 'https://asuracomic.net/images/logo.webp'
+      'logoUrl': 'https://asuracomic.net/images/logo.webp',
     },
     {
-      'name': 'ManhuaPlus', 
+      'name': 'ManhuaPlus',
       'url': 'https://manhuaplus.com/',
-      'logoUrl': 'https://manhuaplus.com/wp-content/uploads/2017/10/logo-1-1.png'
+      'logoUrl':
+          'https://manhuaplus.com/wp-content/uploads/2017/10/logo-1-1.png',
     },
   ];
 
@@ -135,7 +142,12 @@ class SiteListTab extends StatelessWidget {
           itemBuilder: (context, index) {
             if (index == 0) {
               return const Padding(
-                padding: EdgeInsets.only(left: 20.0, right: 20.0, top: 20.0, bottom: 10.0),
+                padding: EdgeInsets.only(
+                  left: 20.0,
+                  right: 20.0,
+                  top: 20.0,
+                  bottom: 10.0,
+                ),
                 child: Text(
                   'MangaSonic',
                   style: TextStyle(
@@ -148,7 +160,12 @@ class SiteListTab extends StatelessWidget {
             }
             if (index == 1) {
               return const Padding(
-                padding: EdgeInsets.only(left: 20.0, right: 20.0, top: 10.0, bottom: 8.0),
+                padding: EdgeInsets.only(
+                  left: 20.0,
+                  right: 20.0,
+                  top: 10.0,
+                  bottom: 8.0,
+                ),
                 child: Text(
                   'AVAILABLE SOURCES',
                   style: TextStyle(
@@ -161,74 +178,115 @@ class SiteListTab extends StatelessWidget {
               );
             }
             if (index == sites.length + 2) {
-               return Padding(
-                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                 child: ElevatedButton.icon(
-                   onPressed: () {},
-                   icon: const Icon(Icons.add, size: 18),
-                   label: const Text('Install more sources'),
-                   style: ElevatedButton.styleFrom(
-                     backgroundColor: const Color(0xFF263238),
-                     foregroundColor: Colors.blue[100],
-                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                     padding: const EdgeInsets.symmetric(vertical: 12),
-                   ),
-                 ),
-               );
+              return Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 20,
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Install more sources'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF263238),
+                    foregroundColor: Colors.blue[100],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              );
             }
 
             final site = sites[index - 2];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-            child: Card(
-              color: const Color(0xFF1E1E24),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                leading: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      )
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Builder(builder: (context) {
-                      if (site['logoUrl'] != null) {
-                        return Image.network(site['logoUrl']!, fit: BoxFit.cover, errorBuilder: (_, err, trace) => Icon(Icons.public, color: Theme.of(context).primaryColor));
-                      }
-                      return Icon(Icons.public, color: Theme.of(context).primaryColor);
-                    }),
-                  ),
-                ),
-                title: Text(site['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                subtitle: Text(
-                  site['url']!.replaceAll('https://', '').replaceAll('/', ''),
-                  style: const TextStyle(color: Colors.blueGrey, fontSize: 12),
-                ),
-                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SiteScreen(siteName: site['name']!, siteUrl: site['url']!),
-                    ),
-                  );
-                },
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12.0,
+                vertical: 4.0,
               ),
-            ),
-          );
-        },
-      ),
+              child: Card(
+                color: const Color(0xFF1E1E24),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).primaryColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).primaryColor.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Builder(
+                        builder: (context) {
+                          if (site['logoUrl'] != null) {
+                            return Image.network(
+                              site['logoUrl']!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, err, trace) => Icon(
+                                Icons.public,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            );
+                          }
+                          return Icon(
+                            Icons.public,
+                            color: Theme.of(context).primaryColor,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    site['name']!,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Text(
+                    site['url']!.replaceAll('https://', '').replaceAll('/', ''),
+                    style: const TextStyle(
+                      color: Colors.blueGrey,
+                      fontSize: 12,
+                    ),
+                  ),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SiteScreen(
+                          siteName: site['name']!,
+                          siteUrl: site['url']!,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -249,7 +307,9 @@ class SettingsTab extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PalettePersonalizerScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const PalettePersonalizerScreen(),
+                ),
               );
             },
           ),

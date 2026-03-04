@@ -8,7 +8,8 @@ class CloudflareInterceptor {
 
   static Map<String, String> get headers {
     final Map<String, String> h = {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     };
     if (_userAgent != null) h['User-Agent'] = _userAgent!;
     if (_cookies != null) h['Cookie'] = _cookies!;
@@ -24,14 +25,18 @@ class CloudflareInterceptor {
       onLoadStop: (controller, uri) async {
         // Wait for cloudflare 5s challenge if needed
         await Future.delayed(const Duration(seconds: 5));
-        
-        final ua = await controller.evaluateJavascript(source: 'navigator.userAgent');
-        final currentCookies = await CookieManager.instance().getCookies(url: WebUri(url));
-        
+
+        final ua = await controller.evaluateJavascript(
+          source: 'navigator.userAgent',
+        );
+        final currentCookies = await CookieManager.instance().getCookies(
+          url: WebUri(url),
+        );
+
         _userAgent = ua?.toString().replaceAll('"', '');
         _cookies = currentCookies.map((c) => '${c.name}=${c.value}').join('; ');
         _hasBypassed = true;
-        
+
         completer.complete();
         headless?.dispose();
       },

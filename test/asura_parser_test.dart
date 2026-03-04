@@ -17,8 +17,14 @@ void main() {
     print('\n--- Testing searchManga ---');
     final searchResults = await parser.searchManga('solo', 1);
     print('Found ${searchResults.length} results for "solo"');
-    expect(searchResults, isNotEmpty, reason: 'Search results should not be empty');
-    print('First result: ${searchResults.first.title} (${searchResults.first.url})');
+    expect(
+      searchResults,
+      isNotEmpty,
+      reason: 'Search results should not be empty',
+    );
+    print(
+      'First result: ${searchResults.first.title} (${searchResults.first.url})',
+    );
 
     print('\n--- Testing fetchMangaDetails ---');
     final manga = searchResults.first;
@@ -29,8 +35,12 @@ void main() {
     print('Genres: ${details.genres.join(", ")}');
     print('Chapter count: ${details.chapters.length}');
     print('Description length: ${details.description.length}');
-    
-    expect(details.chapters, isNotEmpty, reason: 'Chapters should not be empty');
+
+    expect(
+      details.chapters,
+      isNotEmpty,
+      reason: 'Chapters should not be empty',
+    );
 
     print('\n--- Testing fetchChapterImages ---');
     final chapter = details.chapters.first;

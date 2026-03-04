@@ -1,52 +1,57 @@
 <div align="center">
-  <img src="assets/icon/app_icon.png" width="150" alt="Manga Sonic Logo">
+  <img src="assets/icon/app_icon.png" width="150" alt="Manga Sonic">
   <h1>Manga Sonic</h1>
-  <p><strong>A lightning-fast, minimalist, cross-platform manga reader for iOS, Android, and Windows.</strong></p>
+  <p><strong>A lightning-fast, cross-platform manga reader built with Flutter.</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter" alt="Flutter">
+    <img src="https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20Windows-brightgreen" alt="Platform">
+    <img src="https://img.shields.io/github/v/release/Daveruiz1233/MangaSonic?include_prereleases" alt="Release">
+  </p>
 </div>
-
----
-
-## What is Manga Sonic?
-
-Manga Sonic is designed with one primary goal: **uncompromising speed and simplicity.**
-It ditches heavy abstraction layers, extension systems, and bloated UIs in favor of a sleek, dark-mode focused experience that gets you reading your favorite manga instantly.
-
-### Why is it so fast?
-- **Concurrent Networking:** Leverages tuned HTTP connection pooling (allowing up to 20 concurrent host connections) and parallel chunk downloading.
-- **Offline-First Reading:** Once a chapter is downloaded, networking is completely bypassed. The reader strictly uses `Image.file()` ensuring zero lag or timeouts.
-- **Aggressive Caching:** Uses precise LRU disk caches and heavily clamped memory boundaries to aggressively load look-ahead pages and instantly discard unseen ones.
-- **Hardcoded Parsers:** Directly scrapes React Server Component (RSC) payloads and Next.js data to bypass DOM rendering overhead on supported sites.
 
 ---
 
 ## Features
 
-⚡ **Sleek Minimalist UI**
-A gorgeous, pure dark-mode interface designed to stay out of the way. No visual clutter, just your manga.
+### ⚡ Blazing Fast Reader
+- **Seamless infinite scrolling** — chapters transition continuously in both directions with zero jitter or repositioning
+- **Pixel-perfect position restore** — "Continue Reading" returns to the exact page and scroll position where you left off
+- **Aggressive image caching** — pages decode fast enough that even rapid scrolling rarely shows blank placeholders
+- **Offline-first** — downloaded chapters bypass all networking, rendering directly from local storage
 
-📚 **Offline Library & Categories**
-Save favorites to categorized, offline-capable shelves powered by SQLite/Hive.
+### 📚 Library & Organization
+- Save manga to categorized shelves with custom categories
+- Track reading progress automatically (read/unread, last page, scroll position)
+- Continue from where you left off with a single tap
 
-🚀 **Advanced Parallel Download Manager**
-- Download up to **3 mangas concurrently**.
-- Download up to **4 chapters per manga concurrently** (12 active parallel threads).
-- Batch management: Multi-select entire manga groups or individual chapters to bulk-delete.
+### 🚀 Parallel Download Manager
+- Download up to **3 manga concurrently** with **4 chapters each** (12 parallel threads)
+- Persistent download queue — survives app restarts
+- Auto-pause/resume on connectivity changes
+- Multi-select bulk delete with per-manga grouping
 
-🔎 **Supported Sources**
-- ManhuaTop
-- AsuraComic (Fully RSC payload compliant)
-- ManhuaPlus
+### 🔎 Supported Sources
+| Source | Method |
+|--------|--------|
+| ManhuaTop | HTML scraping |
+| AsuraComic | React Server Component (RSC) payload parsing |
+| ManhuaPlus | HTML scraping |
+
+### 🎨 Customization
+- Pure dark-mode interface
+- Palette personalizer with color extraction from manga covers
+- Color filters, brightness, and image adjustments in the reader
 
 ---
 
 ## Screenshots
 
 <div align="center">
-  <img src="assets/screenshots/library.png" width="250" alt="Library Screen">
+  <img src="assets/screenshots/library.png" width="250" alt="Library">
   &nbsp;&nbsp;&nbsp;
-  <img src="assets/screenshots/downloads.png" width="250" alt="Downloads Manager">
+  <img src="assets/screenshots/downloads.png" width="250" alt="Downloads">
   &nbsp;&nbsp;&nbsp;
-  <img src="assets/screenshots/sources.png" width="250" alt="Sources Screen">
+  <img src="assets/screenshots/sources.png" width="250" alt="Sources">
 </div>
 
 ---
@@ -54,22 +59,31 @@ Save favorites to categorized, offline-capable shelves powered by SQLite/Hive.
 ## Getting Started
 
 ### Prerequisites
-- Flutter SDK (latest stable)
-- Supported targets: Android 8+, iOS 15+, Windows 10+
+- Flutter SDK (stable channel, 3.x+)
+- Targets: **iOS 15+**, **Android 8+**, **Windows 10+**
 
 ### Build & Run
 ```bash
-flutter clean
 flutter pub get
 flutter run
 ```
 
 ### Release Builds
 ```bash
-flutter build apk --release
-flutter build windows --release
-flutter build ipa --release
+flutter build apk --release        # Android
+flutter build ios --release         # iOS
+flutter build windows --release     # Windows
 ```
 
-## Contribution
-Contributions are welcome. Please ensure that PRs respect the core tenets of the app: minimal abstractions, maximum speed, and maintaining offline-first integrity for downloaded reading.
+---
+
+## Tech Stack
+
+- **Flutter / Dart** — cross-platform UI
+- **Hive** — local key-value storage for library, history, and downloads
+- **CachedNetworkImage** — disk + memory image caching
+- **CustomScrollView** — center-key bi-directional infinite scrolling for the reader
+
+## License
+
+This project is for personal/educational use.

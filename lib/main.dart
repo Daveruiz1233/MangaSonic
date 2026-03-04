@@ -18,11 +18,11 @@ void main() async {
   await HistoryDB.init();
   await QueueDB.init();
   await MangaCacheDB.init();
-  
+
   final themeService = ThemeService();
   final downloadManager = DownloadManager();
   await downloadManager.init(); // Load queue and start listener
-  
+
   runApp(
     MultiProvider(
       providers: [

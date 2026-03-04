@@ -4,7 +4,12 @@ class Manga {
   final String coverUrl;
   final String sourceId; // e.g. 'manhuatop'
 
-  Manga({required this.title, required this.url, required this.coverUrl, required this.sourceId});
+  Manga({
+    required this.title,
+    required this.url,
+    required this.coverUrl,
+    required this.sourceId,
+  });
 
   Map<String, dynamic> toMap() => {
     'title': title,
@@ -51,7 +56,12 @@ class ChapterStatus {
   final int lastPage;
   final double lastPageOffset;
 
-  ChapterStatus({required this.chapterUrl, this.isRead = false, this.lastPage = 0, this.lastPageOffset = 0.0});
+  ChapterStatus({
+    required this.chapterUrl,
+    this.isRead = false,
+    this.lastPage = 0,
+    this.lastPageOffset = 0.0,
+  });
 
   Map<String, dynamic> toMap() => {
     'chapterUrl': chapterUrl,
@@ -106,8 +116,12 @@ class MangaDetails {
       artist: map['artist'],
       status: map['status'],
       genres: List<String>.from(map['genres']),
-      chapters: (map['chapters'] as List).map((c) => Chapter.fromMap(c)).toList(),
-      suggestions: (map['suggestions'] as List).map((s) => Manga.fromMap(s)).toList(),
+      chapters: (map['chapters'] as List)
+          .map((c) => Chapter.fromMap(c))
+          .toList(),
+      suggestions: (map['suggestions'] as List)
+          .map((s) => Manga.fromMap(s))
+          .toList(),
     );
   }
 }

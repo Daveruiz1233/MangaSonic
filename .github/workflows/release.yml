@@ -38,16 +38,36 @@ jobs:
         with:
           name: Release ${{ github.ref_name }}
           body: |
-            ### 🚀 New Features & Optimizations
-            
-            - **Seamless Infinite Scroll:** Transitioning between chapters is now 100% seamless. The reader continuously appends and prepends chapters to an infinite scrolling view, complete with pixel-perfect scroll position restoration.
-            - **Aggressive Cross-Chapter Prefetching (True Gapless Reading):**
-              - Vastly expanded the memory cache boundary to cache 5-10 pages ahead and behind at all times.
-              - The reader now silently fetches the next/previous chapters long before you reach the edge of the current one.
-            - **Instant Offline Reading:** When reading a downloaded chapter, the app will instantly search storage for adjacent chapters and pre-load them into memory in the background, making offline transitions instantaneous.
-            
-            ### 📦 Build Info
-            - **iOS:** Unsigned IPA package provided for sideloading.
+            ## 🚀 Manga Sonic ${{ github.ref_name }}
+
+            ### Reader
+            - Seamless infinite scrolling between chapters (both directions)
+            - Pixel-perfect "Continue Reading" position restore
+            - Aggressive image caching with 6000px pre-render zone
+            - Offline-first reading from downloaded chapters
+            - Chapter separators and page counter overlay
+
+            ### Library & Tracking
+            - Categorized manga shelves
+            - Automatic read/unread progress tracking
+            - Per-page scroll position persistence
+
+            ### Download Manager
+            - Parallel downloads (3 manga × 4 chapters = 12 concurrent threads)
+            - Persistent queue with auto-resume on reconnect
+            - Multi-select bulk management with per-manga grouping
+
+            ### Sources
+            - ManhuaTop (HTML scraping)
+            - AsuraComic (RSC payload parsing)
+            - ManhuaPlus (HTML scraping)
+
+            ### Customization
+            - Pure dark-mode UI with palette extraction
+            - Reader color filters, brightness, and image adjustments
+
+            ---
+            📦 **iOS:** Unsigned IPA provided for sideloading via AltStore/Sideloadly.
           files: ios-release.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

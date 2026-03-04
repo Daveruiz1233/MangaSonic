@@ -20,7 +20,7 @@ class _SiteScreenState extends State<SiteScreen> {
   bool _isLoading = true;
   int _currentPage = 1;
   final ScrollController _scrollController = ScrollController();
-  
+
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -30,7 +30,9 @@ class _SiteScreenState extends State<SiteScreen> {
     super.initState();
     _fetchData();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 500 && !_isLoading) {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 500 &&
+          !_isLoading) {
         _currentPage++;
         _fetchData();
       }
@@ -43,7 +45,7 @@ class _SiteScreenState extends State<SiteScreen> {
     try {
       final parser = getParserForSite(widget.siteName);
       List<Manga> newMangas;
-      
+
       if (_isSearching && _searchQuery.isNotEmpty) {
         newMangas = await parser.searchManga(_searchQuery, _currentPage);
       } else {
@@ -58,9 +60,9 @@ class _SiteScreenState extends State<SiteScreen> {
     } catch (e) {
       if (e.toString().contains('403') || e.toString().contains('Cloudflare')) {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Passing Cloudflare... Please wait.'))
-           );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Passing Cloudflare... Please wait.')),
+          );
         }
         await CloudflareInterceptor.bypass(widget.siteUrl);
         // Retry once
@@ -69,7 +71,9 @@ class _SiteScreenState extends State<SiteScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -78,7 +82,7 @@ class _SiteScreenState extends State<SiteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: _isSearching 
+        title: _isSearching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
@@ -115,7 +119,7 @@ class _SiteScreenState extends State<SiteScreen> {
                 }
               });
             },
-          )
+          ),
         ],
       ),
       body: _mangas.isEmpty && _isLoading
@@ -159,9 +163,11 @@ class _SiteScreenState extends State<SiteScreen> {
                           child: CachedNetworkImage(
                             imageUrl: manga.coverUrl,
                             fit: BoxFit.cover,
-                            memCacheWidth: 300, 
-                            placeholder: (context, url) => Container(color: Colors.deepPurple[800]),
-                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                            memCacheWidth: 300,
+                            placeholder: (context, url) =>
+                                Container(color: Colors.deepPurple[800]),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.error),
                           ),
                         ),
                         Padding(
@@ -182,4 +188,3 @@ class _SiteScreenState extends State<SiteScreen> {
     );
   }
 }
-

@@ -14,7 +14,6 @@ import 'package:http/io_client.dart';
 
 typedef DownloadTask = QueuedTask;
 
-
 class DownloadStatus {
   final double progress;
   final bool isDownloading;
@@ -48,21 +47,25 @@ class DownloadManager extends ChangeNotifier {
     // Load persisted queue
     final savedQueue = QueueDB.getQueue();
     _queue.addAll(savedQueue);
-    
+
     // Check initial connectivity
     final result = await _connectivity.checkConnectivity();
     _isOffline = result.contains(ConnectivityResult.none);
-    
+
     // Listen for changes
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((results) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      results,
+    ) {
       final wasOffline = _isOffline;
       _isOffline = results.contains(ConnectivityResult.none);
-      
+
       if (wasOffline && !_isOffline && _queue.isNotEmpty && !_isProcessing) {
         debugPrint('Internet restored, resuming downloads...');
         _processQueue();
       } else if (_isOffline) {
-        debugPrint('Internet lost, downloads will pause after current chunk...');
+        debugPrint(
+          'Internet lost, downloads will pause after current chunk...',
+        );
       }
       notifyListeners();
     });
@@ -107,7 +110,7 @@ class DownloadManager extends ChangeNotifier {
     required String sourceId,
   }) async {
     if (DownloadDB.isDownloaded(chapterUrl)) return;
-    
+
     // Check if already in queue
     if (_queue.any((task) => task.chapterUrl == chapterUrl)) return;
 
@@ -200,7 +203,7 @@ class DownloadManager extends ChangeNotifier {
   Future<void> _executeTask(DownloadTask task) async {
     final parser = getParserForSite(task.sourceId);
     final imageUrls = await parser.fetchChapterImages(task.chapterUrl);
-    
+
     if (imageUrls.isEmpty) {
       _statuses.remove(task.chapterUrl);
       notifyListeners();
@@ -216,7 +219,7 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
 
     final appDir = await getApplicationDocumentsDirectory();
-    
+
     // Improved sanitization for Windows and cross-platform safety
     String sanitize(String name) {
       // Remove reserved characters: \ / : * ? " < > |
@@ -224,7 +227,30 @@ class DownloadManager extends ChangeNotifier {
       // Remove trailing dots and spaces which are problematic on Windows
       sanitized = sanitized.trim().replaceAll(RegExp(r'\.+$'), '');
       // Handle reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
-      final reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+      final reservedNames = [
+        'CON',
+        'PRN',
+        'AUX',
+        'NUL',
+        'COM1',
+        'COM2',
+        'COM3',
+        'COM4',
+        'COM5',
+        'COM6',
+        'COM7',
+        'COM8',
+        'COM9',
+        'LPT1',
+        'LPT2',
+        'LPT3',
+        'LPT4',
+        'LPT5',
+        'LPT6',
+        'LPT7',
+        'LPT8',
+        'LPT9',
+      ];
       if (reservedNames.contains(sanitized.toUpperCase())) {
         sanitized = '${sanitized}_';
       }
@@ -233,10 +259,16 @@ class DownloadManager extends ChangeNotifier {
 
     final safeMangaTitle = sanitize(task.mangaTitle);
     final safeChapterTitle = sanitize(task.chapterTitle);
-    
-    final dirPath = p.join(appDir.path, 'downloads', task.sourceId, safeMangaTitle, safeChapterTitle);
+
+    final dirPath = p.join(
+      appDir.path,
+      'downloads',
+      task.sourceId,
+      safeMangaTitle,
+      safeChapterTitle,
+    );
     debugPrint('Downloading to: $dirPath');
-    
+
     final directory = Directory(dirPath);
     if (!await directory.exists()) {
       try {
@@ -251,27 +283,31 @@ class DownloadManager extends ChangeNotifier {
 
     int successCount = 0;
     const int concurrency = 3; // Reduced for better stability
-    
+
     for (int i = 0; i < imageUrls.length; i += concurrency) {
-      final end = (i + concurrency > imageUrls.length) ? imageUrls.length : i + concurrency;
+      final end = (i + concurrency > imageUrls.length)
+          ? imageUrls.length
+          : i + concurrency;
       final chunk = imageUrls.sublist(i, end);
       final indexOffset = i;
 
-      final results = await Future.wait(chunk.asMap().entries.map((entry) async {
-        if (_isOffline) return false;
-        final imgUrl = entry.value;
-        final imgIndex = indexOffset + entry.key;
-        return _downloadImage(imgUrl, dirPath, imgIndex, parser.baseUrl);
-      }));
-      
+      final results = await Future.wait(
+        chunk.asMap().entries.map((entry) async {
+          if (_isOffline) return false;
+          final imgUrl = entry.value;
+          final imgIndex = indexOffset + entry.key;
+          return _downloadImage(imgUrl, dirPath, imgIndex, parser.baseUrl);
+        }),
+      );
+
       if (_isOffline) {
         debugPrint('Download paused due to no internet.');
         _isProcessing = false;
         return; // Current task remains at head of queue
       }
-      
+
       successCount += results.where((r) => r).length;
-      
+
       // Update progress
       _statuses[task.chapterUrl] = DownloadStatus(
         isDownloading: true,
@@ -283,17 +319,19 @@ class DownloadManager extends ChangeNotifier {
     }
 
     if (successCount > 0) {
-      await DownloadDB.saveDownload(DownloadedChapter(
-        chapterUrl: task.chapterUrl,
-        chapterTitle: task.chapterTitle,
-        mangaTitle: task.mangaTitle,
-        mangaUrl: task.mangaUrl,
-        coverUrl: task.coverUrl,
-        author: task.author,
-        genres: task.genres,
-        directoryPath: dirPath,
-        imageCount: successCount,
-      ));
+      await DownloadDB.saveDownload(
+        DownloadedChapter(
+          chapterUrl: task.chapterUrl,
+          chapterTitle: task.chapterTitle,
+          mangaTitle: task.mangaTitle,
+          mangaUrl: task.mangaUrl,
+          coverUrl: task.coverUrl,
+          author: task.author,
+          genres: task.genres,
+          directoryPath: dirPath,
+          imageCount: successCount,
+        ),
+      );
     } else {
       if (await directory.exists()) await directory.delete(recursive: true);
     }
@@ -302,20 +340,31 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> _downloadImage(String url, String dirPath, int index, String referer) async {
+  Future<bool> _downloadImage(
+    String url,
+    String dirPath,
+    int index,
+    String referer,
+  ) async {
     int retries = 3;
     while (retries > 0) {
       try {
-        final res = await _client.get(
-          Uri.parse(url),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': referer,
-          }
-        ).timeout(const Duration(seconds: 30));
+        final res = await _client
+            .get(
+              Uri.parse(url),
+              headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': referer,
+              },
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (res.statusCode == 200) {
-          final filePath = p.join(dirPath, '${index.toString().padLeft(4, '0')}.jpg');
+          final filePath = p.join(
+            dirPath,
+            '${index.toString().padLeft(4, '0')}.jpg',
+          );
           final file = File(filePath);
           await file.writeAsBytes(res.bodyBytes);
           return true;

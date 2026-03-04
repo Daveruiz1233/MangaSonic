@@ -4,24 +4,38 @@ import 'package:flutter/foundation.dart';
 import 'base_parser.dart';
 
 class ManhuaTopParser extends BaseParser {
-  ManhuaTopParser() : super(siteName: 'ManhuaTop', baseUrl: 'https://manhuatop.org');
+  ManhuaTopParser()
+    : super(siteName: 'ManhuaTop', baseUrl: 'https://manhuatop.org');
 
   @override
   Future<List<Manga>> fetchMangaList(int page) async {
-    final response = await getRequest(page == 1 ? '$baseUrl/manga/' : '$baseUrl/manga/page/$page/');
+    final response = await getRequest(
+      page == 1 ? '$baseUrl/manga/' : '$baseUrl/manga/page/$page/',
+    );
     final document = parser.parse(response.body);
-    final elements = document.querySelectorAll('.page-item-detail, .c-tabs-item__content, .item');
-    
+    final elements = document.querySelectorAll(
+      '.page-item-detail, .c-tabs-item__content, .item',
+    );
+
     List<Manga> list = [];
     for (var element in elements) {
       final aTag = element.querySelector('a');
       final imgTag = element.querySelector('img');
       if (aTag != null && imgTag != null) {
         final url = aTag.attributes['href'] ?? '';
-        final title = aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? '';
-        final coverUrl = imgTag.attributes['src'] ?? imgTag.attributes['data-src'] ?? '';
+        final title =
+            aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? '';
+        final coverUrl =
+            imgTag.attributes['src'] ?? imgTag.attributes['data-src'] ?? '';
         if (url.isNotEmpty && title.isNotEmpty) {
-          list.add(Manga(title: title.trim(), url: url, coverUrl: coverUrl, sourceId: 'manhuatop'));
+          list.add(
+            Manga(
+              title: title.trim(),
+              url: url,
+              coverUrl: coverUrl,
+              sourceId: 'manhuatop',
+            ),
+          );
         }
       }
     }
@@ -30,10 +44,14 @@ class ManhuaTopParser extends BaseParser {
 
   @override
   Future<List<Manga>> searchManga(String query, int page) async {
-    final response = await getRequest(page == 1 ? '$baseUrl/?s=$query&post_type=wp-manga' : '$baseUrl/page/$page/?s=$query&post_type=wp-manga');
+    final response = await getRequest(
+      page == 1
+          ? '$baseUrl/?s=$query&post_type=wp-manga'
+          : '$baseUrl/page/$page/?s=$query&post_type=wp-manga',
+    );
     final document = parser.parse(response.body);
     final elements = document.querySelectorAll('.c-tabs-item__content');
-    
+
     List<Manga> list = [];
     // (similar parsing logic here)
     for (var element in elements) {
@@ -41,10 +59,19 @@ class ManhuaTopParser extends BaseParser {
       final imgTag = element.querySelector('img');
       if (aTag != null && imgTag != null) {
         final url = aTag.attributes['href'] ?? '';
-        final title = aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? '';
-        final coverUrl = imgTag.attributes['src'] ?? imgTag.attributes['data-src'] ?? '';
+        final title =
+            aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? '';
+        final coverUrl =
+            imgTag.attributes['src'] ?? imgTag.attributes['data-src'] ?? '';
         if (url.isNotEmpty && title.isNotEmpty) {
-          list.add(Manga(title: title.trim(), url: url, coverUrl: coverUrl, sourceId: 'manhuatop'));
+          list.add(
+            Manga(
+              title: title.trim(),
+              url: url,
+              coverUrl: coverUrl,
+              sourceId: 'manhuatop',
+            ),
+          );
         }
       }
     }
@@ -71,13 +98,15 @@ class ManhuaTopParser extends BaseParser {
     // For simplicity, we try direct fetch first, and fallback to ajax
     var response = await getRequest(mangaUrl);
     var document = parser.parse(response.body);
-    
+
     // Sometimes it's loaded via POST to admin-ajax.php, but let's see if we can find it
     var chapterElements = document.querySelectorAll('.wp-manga-chapter a');
-    
+
     if (chapterElements.isEmpty) {
       // Trying the Madara /ajax/chapters/ route (often used in newer Madara versions)
-      final ajaxUrl = mangaUrl.endsWith('/') ? '${mangaUrl}ajax/chapters/' : '$mangaUrl/ajax/chapters/';
+      final ajaxUrl = mangaUrl.endsWith('/')
+          ? '${mangaUrl}ajax/chapters/'
+          : '$mangaUrl/ajax/chapters/';
       try {
         response = await postRequest(
           ajaxUrl,
@@ -99,7 +128,7 @@ class ManhuaTopParser extends BaseParser {
       if (mangaId != null) {
         response = await postRequest(
           '$baseUrl/wp-admin/admin-ajax.php',
-          body: { 'action': 'manga_get_chapters', 'manga': mangaId },
+          body: {'action': 'manga_get_chapters', 'manga': mangaId},
           headers: {'X-Requested-With': 'XMLHttpRequest'},
         );
         document = parser.parse(response.body);
@@ -123,8 +152,10 @@ class ManhuaTopParser extends BaseParser {
   Future<List<String>> fetchChapterImages(String chapterUrl) async {
     final response = await getRequest(chapterUrl);
     final document = parser.parse(response.body);
-    final images = document.querySelectorAll('.page-break img, .reading-content img');
-    
+    final images = document.querySelectorAll(
+      '.page-break img, .reading-content img',
+    );
+
     List<String> list = [];
     for (var img in images) {
       final src = img.attributes['data-src'] ?? img.attributes['src'] ?? '';

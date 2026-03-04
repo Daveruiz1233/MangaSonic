@@ -15,7 +15,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late List<LibraryCategory> _categories;
   late List<LibraryItem> _items;
   String _selectedCategoryId = 'default';
-  
+
   // Selection state
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = {};
@@ -34,7 +34,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() {
       _categories = LibraryDB.getCategories();
       _items = LibraryDB.getItems();
-      if (!_categories.any((c) => c.id == _selectedCategoryId) && _categories.isNotEmpty) {
+      if (!_categories.any((c) => c.id == _selectedCategoryId) &&
+          _categories.isNotEmpty) {
         _selectedCategoryId = _categories.first.id;
       }
     });
@@ -59,7 +60,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const Text('Delete Selected?'),
         content: Text('Remove ${_selectedIds.length} items from library?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               for (final id in _selectedIds) {
@@ -74,7 +78,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
-      )
+      ),
     );
   }
 
@@ -96,13 +100,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
             decoration: const InputDecoration(hintText: 'Category Name'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
             TextButton(
               onPressed: () async {
                 final name = controller.text.trim();
                 if (name.isNotEmpty) {
                   final id = DateTime.now().millisecondsSinceEpoch.toString();
-                  await LibraryDB.addCategory(LibraryCategory(id: id, name: name));
+                  await LibraryDB.addCategory(
+                    LibraryCategory(id: id, name: name),
+                  );
                   _loadData();
                 }
                 if (context.mounted) {
@@ -140,56 +149,61 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 },
               )
             : null,
-        title: _isSelectionMode 
-          ? Text('${_selectedIds.length} Selected') 
-          : _isSearching
-              ? TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Search library...',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(color: Colors.white54),
-                  ),
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
-                  onChanged: (_) => setState(() {}),
-                )
-              : const Text('Library', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: _isSelectionMode ? [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _deleteSelected,
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => setState(() {
-              _isSelectionMode = false;
-              _selectedIds.clear();
-            }),
-          ),
-        ] : [
-          if (!_isSearching)
-            IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () => setState(() => _isSearching = true),
-            ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {},
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'add_category') _addCategoryDialog();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'add_category',
-                child: Text('Add Category'),
+        title: _isSelectionMode
+            ? Text('${_selectedIds.length} Selected')
+            : _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search library...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.white54),
+                ),
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+                onChanged: (_) => setState(() {}),
+              )
+            : const Text(
+                'Library',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ],
-          ),
-        ],
+        actions: _isSelectionMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _deleteSelected,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() {
+                    _isSelectionMode = false;
+                    _selectedIds.clear();
+                  }),
+                ),
+              ]
+            : [
+                if (!_isSearching)
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () => setState(() => _isSearching = true),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.filter_list),
+                  onPressed: () {},
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'add_category') _addCategoryDialog();
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'add_category',
+                      child: Text('Add Category'),
+                    ),
+                  ],
+                ),
+              ],
       ),
       body: Column(
         children: [
@@ -209,14 +223,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   child: Container(
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected ? theme.primaryColor.withValues(alpha: 0.2) : Colors.grey[850],
+                      color: isSelected
+                          ? theme.primaryColor.withValues(alpha: 0.2)
+                          : Colors.grey[850],
                       borderRadius: BorderRadius.circular(20),
-                      border: isSelected ? Border.all(color: theme.primaryColor, width: 1) : Border.all(color: Colors.transparent, width: 1),
+                      border: isSelected
+                          ? Border.all(color: theme.primaryColor, width: 1)
+                          : Border.all(color: Colors.transparent, width: 1),
                     ),
                     child: Text(
-                      cat.name, 
+                      cat.name,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: isSelected ? theme.primaryColor : Colors.white70,
@@ -240,7 +261,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               itemBuilder: (context, index) {
                 final item = currentItems[index];
                 final isSelected = _selectedIds.contains(item.mangaUrl);
-                
+
                 return GestureDetector(
                   onTap: () {
                     if (_isSelectionMode) {
@@ -267,9 +288,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         clipBehavior: Clip.antiAlias,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
-                          side: isSelected 
-                            ? BorderSide(color: theme.primaryColor, width: 3)
-                            : BorderSide.none,
+                          side: isSelected
+                              ? BorderSide(color: theme.primaryColor, width: 3)
+                              : BorderSide.none,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -279,8 +300,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 imageUrl: item.coverUrl,
                                 fit: BoxFit.cover,
                                 memCacheWidth: 300,
-                                placeholder: (context, url) => Container(color: theme.primaryColor.withValues(alpha: 0.3)),
-                                errorWidget: (context, url, error) => const Icon(Icons.error),
+                                placeholder: (context, url) => Container(
+                                  color: theme.primaryColor.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) =>
+                                    const Icon(Icons.error),
                               ),
                             ),
                             Padding(
@@ -302,7 +328,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           child: CircleAvatar(
                             radius: 12,
                             backgroundColor: theme.primaryColor,
-                            child: const Icon(Icons.check, size: 16, color: Colors.white),
+                            child: const Icon(
+                              Icons.check,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                     ],

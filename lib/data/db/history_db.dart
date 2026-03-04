@@ -15,7 +15,10 @@ class HistoryDB {
     return ChapterStatus.fromMap(data).isRead;
   }
 
-  static Future<void> markAsRead(String chapterUrl, {bool isRead = true}) async {
+  static Future<void> markAsRead(
+    String chapterUrl, {
+    bool isRead = true,
+  }) async {
     final box = Hive.box(statusBoxName);
     final existing = box.get(chapterUrl);
     int lastPage = 0;
@@ -25,18 +28,32 @@ class HistoryDB {
       lastPage = status.lastPage;
       lastPageOffset = status.lastPageOffset;
     }
-    final status = ChapterStatus(chapterUrl: chapterUrl, isRead: isRead, lastPage: lastPage, lastPageOffset: lastPageOffset);
+    final status = ChapterStatus(
+      chapterUrl: chapterUrl,
+      isRead: isRead,
+      lastPage: lastPage,
+      lastPageOffset: lastPageOffset,
+    );
     await box.put(chapterUrl, status.toMap());
   }
 
-  static Future<void> saveProgress(String chapterUrl, int lastPage, {double lastPageOffset = 0.0}) async {
+  static Future<void> saveProgress(
+    String chapterUrl,
+    int lastPage, {
+    double lastPageOffset = 0.0,
+  }) async {
     final box = Hive.box(statusBoxName);
     final existing = box.get(chapterUrl);
     bool read = false;
     if (existing != null) {
       read = ChapterStatus.fromMap(existing).isRead;
     }
-    final status = ChapterStatus(chapterUrl: chapterUrl, isRead: read, lastPage: lastPage, lastPageOffset: lastPageOffset);
+    final status = ChapterStatus(
+      chapterUrl: chapterUrl,
+      isRead: read,
+      lastPage: lastPage,
+      lastPageOffset: lastPageOffset,
+    );
     await box.put(chapterUrl, status.toMap());
   }
 

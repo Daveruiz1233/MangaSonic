@@ -4,7 +4,10 @@ import 'package:manga_sonic/parser/asuracomic_parser.dart';
 import 'package:manga_sonic/parser/manhuaplus_parser.dart';
 
 BaseParser getParserForSite(String siteName) {
-  final normalized = siteName.toLowerCase().replaceAll(' ', '').replaceAll('-', '');
+  final normalized = siteName
+      .toLowerCase()
+      .replaceAll(' ', '')
+      .replaceAll('-', '');
   switch (normalized) {
     case 'manhuatop':
       return ManhuaTopParser();

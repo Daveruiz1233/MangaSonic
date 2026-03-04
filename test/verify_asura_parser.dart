@@ -3,7 +3,7 @@ import 'package:manga_sonic/data/models/models.dart';
 
 void main() async {
   final p = AsuraComicParser();
-  
+
   // Test 1: fetchMangaList page 1
   print('=== fetchMangaList page 1 ===');
   final page1 = await p.fetchMangaList(1);
@@ -11,7 +11,7 @@ void main() async {
   for (var m in page1) {
     print('  ${m.title} -> ${m.url}');
   }
-  
+
   // Test 2: fetchMangaList page 2
   print('\n=== fetchMangaList page 2 ===');
   final page2 = await p.fetchMangaList(2);
@@ -19,7 +19,7 @@ void main() async {
   for (var m in page2) {
     print('  ${m.title} -> ${m.url}');
   }
-  
+
   // Check for duplicates between pages
   final p1Urls = page1.map((m) => m.url).toSet();
   final p2Urls = page2.map((m) => m.url).toSet();
@@ -31,7 +31,7 @@ void main() async {
   } else {
     print('  PASS: No duplicates!');
   }
-  
+
   // Test 3: fetchChapters
   print('\n=== fetchChapters ===');
   final manga = page1.first;
@@ -41,15 +41,17 @@ void main() async {
   for (var c in chapters) {
     print('  ${c.title} -> ${c.url}');
   }
-  
+
   // Verify no "First Chapter" or "New Chapter" entries
-  final badChapters = chapters.where((c) => c.title == 'First Chapter' || c.title == 'New Chapter');
+  final badChapters = chapters.where(
+    (c) => c.title == 'First Chapter' || c.title == 'New Chapter',
+  );
   if (badChapters.isNotEmpty) {
     print('  FAIL: Found promo button chapters!');
   } else {
     print('  PASS: No promo button chapters!');
   }
-  
+
   // Test 4: fetchChapterImages
   print('\n=== fetchChapterImages ===');
   if (chapters.isNotEmpty) {
@@ -67,7 +69,7 @@ void main() async {
       print('  FAIL: No images found!');
     }
   }
-  
+
   // Test 5: search
   print('\n=== searchManga ===');
   final results = await p.searchManga('demon', 1);
@@ -75,6 +77,6 @@ void main() async {
   for (var m in results.take(5)) {
     print('  ${m.title}');
   }
-  
+
   print('\n=== ALL TESTS COMPLETE ===');
 }

@@ -94,38 +94,54 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       builder: (context, manager, child) {
         final downloads = DownloadDB.getDownloads();
         final queue = manager.queue;
-        
+
         // Group everything by Manga URL
         final Map<String, _MangaDownloadGroup> groups = {};
 
         // Process completed downloads
         for (var d in downloads) {
-          groups.putIfAbsent(d.mangaUrl, () => _MangaDownloadGroup(
-            mangaTitle: d.mangaTitle,
-            mangaUrl: d.mangaUrl,
-            coverUrl: d.coverUrl,
-            author: d.author,
-            genres: d.genres,
-          )).completedChapters.add(d);
+          groups
+              .putIfAbsent(
+                d.mangaUrl,
+                () => _MangaDownloadGroup(
+                  mangaTitle: d.mangaTitle,
+                  mangaUrl: d.mangaUrl,
+                  coverUrl: d.coverUrl,
+                  author: d.author,
+                  genres: d.genres,
+                ),
+              )
+              .completedChapters
+              .add(d);
         }
 
         // Process active/queued downloads
         for (var q in queue) {
-          groups.putIfAbsent(q.mangaUrl, () => _MangaDownloadGroup(
-            mangaTitle: q.mangaTitle,
-            mangaUrl: q.mangaUrl,
-            coverUrl: q.coverUrl,
-            author: q.author,
-            genres: q.genres,
-          )).activeTasks.add(q);
+          groups
+              .putIfAbsent(
+                q.mangaUrl,
+                () => _MangaDownloadGroup(
+                  mangaTitle: q.mangaTitle,
+                  mangaUrl: q.mangaUrl,
+                  coverUrl: q.coverUrl,
+                  author: q.author,
+                  genres: q.genres,
+                ),
+              )
+              .activeTasks
+              .add(q);
         }
 
         final sortedGroups = groups.values.toList();
 
         // Count total selectable (completed) chapters
         final totalSelectable = sortedGroups.fold<int>(
-          0, (sum, g) => sum + g.completedChapters.length);
-        final allSelected = _selectedChapterUrls.length == totalSelectable && totalSelectable > 0;
+          0,
+          (sum, g) => sum + g.completedChapters.length,
+        );
+        final allSelected =
+            _selectedChapterUrls.length == totalSelectable &&
+            totalSelectable > 0;
 
         return PopScope(
           canPop: !_isSelecting,
@@ -145,7 +161,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     actions: [
                       // Select All / Deselect All
                       IconButton(
-                        icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+                        icon: Icon(
+                          allSelected ? Icons.deselect : Icons.select_all,
+                        ),
                         tooltip: allSelected ? 'Deselect All' : 'Select All',
                         onPressed: () {
                           if (allSelected) {
@@ -175,10 +193,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             child: SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                        )
+                        ),
                     ],
                   ),
             body: sortedGroups.isEmpty
@@ -288,11 +309,16 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isActive = widget.group.activeTasks.isNotEmpty;
-    
+
     // Calculate progress based on active tasks
     double progress = 1.0;
     if (isActive) {
-      final activeSubtaskProgress = widget.group.activeTasks.fold(0.0, (sum, t) => sum + widget.manager.getStatus(t.chapterUrl).progress) / widget.group.activeTasks.length;
+      final activeSubtaskProgress =
+          widget.group.activeTasks.fold(
+            0.0,
+            (sum, t) => sum + widget.manager.getStatus(t.chapterUrl).progress,
+          ) /
+          widget.group.activeTasks.length;
       final completedCount = widget.group.completedChapters.length;
       final totalCount = completedCount + widget.group.activeTasks.length;
       progress = (completedCount + activeSubtaskProgress) / totalCount;
@@ -303,14 +329,17 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
         .where((ch) => widget.selectedUrls.contains(ch.chapterUrl))
         .length;
     final hasSelectedInGroup = selectedInGroup > 0;
-    final allChaptersSelected = selectedInGroup == widget.group.completedChapters.length
-        && widget.group.completedChapters.isNotEmpty;
+    final allChaptersSelected =
+        selectedInGroup == widget.group.completedChapters.length &&
+        widget.group.completedChapters.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
       // Subtle highlight when some chapters in this group are selected
-      color: hasSelectedInGroup ? theme.colorScheme.primary.withOpacity(0.08) : null,
+      color: hasSelectedInGroup
+          ? theme.colorScheme.primary.withOpacity(0.08)
+          : null,
       child: Column(
         children: [
           Padding(
@@ -326,7 +355,11 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                     width: 80,
                     height: 110,
                     fit: BoxFit.cover,
-                    errorWidget: (_, err, trace) => Container(color: Colors.grey[900], width: 80, height: 110),
+                    errorWidget: (_, err, trace) => Container(
+                      color: Colors.grey[900],
+                      width: 80,
+                      height: 110,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -337,21 +370,30 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                     children: [
                       Text(
                         widget.group.mangaTitle,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         widget.group.genres.join(', '),
-                        style: TextStyle(color: theme.colorScheme.primary, fontSize: 12),
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 12,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         widget.group.author,
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       if (isActive) ...[
@@ -367,26 +409,39 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                             const SizedBox(width: 8),
                             Text(
                               '${(progress * 100).toInt()}%',
-                              style: const TextStyle(fontSize: 10, color: Colors.white70),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white70,
+                              ),
                             ),
                           ],
                         ),
                       ] else if (widget.isSelecting && hasSelectedInGroup) ...[
                         Text(
                           '$selectedInGroup of ${widget.group.completedChapters.length} selected',
-                          style: TextStyle(fontSize: 10, color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ] else ...[
                         Text(
                           '${widget.group.completedChapters.length} CHAPTERS DOWNLOADED',
-                          style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: Icon(_isExpanded ? Icons.expand_less : Icons.expand_more),
+                  icon: Icon(
+                    _isExpanded ? Icons.expand_less : Icons.expand_more,
+                  ),
                   onPressed: () => setState(() => _isExpanded = !_isExpanded),
                 ),
               ],
@@ -431,7 +486,9 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                 children: [
                   // Completed chapters
                   ...widget.group.completedChapters.map((ch) {
-                    final isSelected = widget.selectedUrls.contains(ch.chapterUrl);
+                    final isSelected = widget.selectedUrls.contains(
+                      ch.chapterUrl,
+                    );
                     return ListTile(
                       dense: true,
                       // Show checkbox when in selection mode
@@ -445,9 +502,15 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                       title: Text(ch.chapterTitle),
                       trailing: widget.isSelecting
                           ? null
-                          : const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                          : const Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                              size: 18,
+                            ),
                       selected: isSelected,
-                      selectedTileColor: theme.colorScheme.primary.withOpacity(0.12),
+                      selectedTileColor: theme.colorScheme.primary.withOpacity(
+                        0.12,
+                      ),
                       onTap: widget.isSelecting
                           ? () => widget.onToggle(ch.chapterUrl)
                           : () => _openReader(context, ch),
@@ -462,10 +525,25 @@ class _MangaGroupTileState extends State<_MangaGroupTile> {
                     return ListTile(
                       dense: true,
                       title: Text(task.chapterTitle),
-                      subtitle: status.isDownloading ? Text('Downloading ${status.downloadedImages}/${status.totalImages}') : const Text('Queued'),
-                      trailing: status.isDownloading 
-                        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(value: status.progress, strokeWidth: 2))
-                        : const Icon(Icons.timer_outlined, size: 18, color: Colors.white54),
+                      subtitle: status.isDownloading
+                          ? Text(
+                              'Downloading ${status.downloadedImages}/${status.totalImages}',
+                            )
+                          : const Text('Queued'),
+                      trailing: status.isDownloading
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                value: status.progress,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.timer_outlined,
+                              size: 18,
+                              color: Colors.white54,
+                            ),
                     );
                   }),
                 ],

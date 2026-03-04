@@ -1,4 +1,3 @@
-
 class LibraryCategory {
   final String id;
   final String name;
