@@ -8,6 +8,7 @@ import 'package:manga_sonic/data/db/queue_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/services/theme_service.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
+import 'package:manga_sonic/utils/library_update_service.dart';
 import 'ui/screens/home_screen.dart';
 
 void main() async {
@@ -18,16 +19,19 @@ void main() async {
   await HistoryDB.init();
   await QueueDB.init();
   await MangaCacheDB.init();
+  await LibraryUpdateService.init();
 
   final themeService = ThemeService();
   final downloadManager = DownloadManager();
   await downloadManager.init(); // Load queue and start listener
+  final updateService = LibraryUpdateService();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: themeService),
         ChangeNotifierProvider.value(value: downloadManager),
+        ChangeNotifierProvider.value(value: updateService),
       ],
       child: const MangaSonicApp(),
     ),

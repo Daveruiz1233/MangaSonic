@@ -8,9 +8,6 @@ class LibraryDB {
   static Future<void> init() async {
     await Hive.openBox(categoryBoxName);
     await Hive.openBox(itemBoxName);
-    if (getCategories().isEmpty) {
-      addCategory(LibraryCategory(id: 'default', name: 'Default'));
-    }
   }
 
   // Categories
@@ -24,15 +21,21 @@ class LibraryDB {
   }
 
   static Future<void> deleteCategory(String id) async {
-    if (id == 'default') return; // protect default
-    await Hive.box(categoryBoxName).delete(id);
-    // Remove all items in this category or move to default
+    // Remove all items in this category or move to all (null category)
     final items = getItems();
     for (var item in items) {
       if (item.categoryId == id) {
-        removeItem(item.mangaUrl);
+        // Update item to have no category (falls into 'All')
+        await saveItem(LibraryItem(
+          mangaUrl: item.mangaUrl,
+          title: item.title,
+          coverUrl: item.coverUrl,
+          sourceId: item.sourceId,
+          categoryId: '',
+        ));
       }
     }
+    await Hive.box(categoryBoxName).delete(id);
   }
 
   // Items

@@ -142,6 +142,19 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
+  String _getSourceName(String id) {
+    switch (id) {
+      case 'asuracomic':
+        return 'Asura Scans';
+      case 'manhuatop':
+        return 'ManhuaTop';
+      case 'manhuaplus':
+        return 'Manhua Plus';
+      default:
+        return id.toUpperCase();
+    }
+  }
+
   int _findContinueChapterIndex() {
     final chapters = _details?.chapters ?? [];
     if (chapters.isEmpty) return 0;
@@ -209,36 +222,6 @@ class _MangaScreenState extends State<MangaScreen> {
           duration: const Duration(milliseconds: 200),
           child: Text(widget.mangaTitle),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(_isSaved ? Icons.bookmark : Icons.bookmark_add_outlined),
-            onPressed: _toggleSave,
-          ),
-          IconButton(
-            icon: const Icon(Icons.open_in_browser),
-            onPressed: () => launchUrl(Uri.parse(widget.mangaUrl)),
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.download_for_offline),
-            onSelected: (value) async {
-              if (value == 'all') _downloadChapters(chapters);
-              if (value == 'unread')
-                _downloadChapters(
-                  chapters.where((c) => !HistoryDB.isRead(c.url)).toList(),
-                );
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'all',
-                child: Text('Download all chapters'),
-              ),
-              const PopupMenuItem(
-                value: 'unread',
-                child: Text('Download all unread'),
-              ),
-            ],
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -308,6 +291,44 @@ class _MangaScreenState extends State<MangaScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: (_dominantColor ??
+                                            Colors.deepPurpleAccent)
+                                        .withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: (_dominantColor ??
+                                              Colors.deepPurpleAccent)
+                                          .withValues(alpha: 0.5),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.source_outlined,
+                                        size: 12,
+                                        color: Colors.white70,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _getSourceName(widget.sourceId),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                                 _infoRow(
                                   Icons.person_outline,
                                   _details!.author,
@@ -332,7 +353,38 @@ class _MangaScreenState extends State<MangaScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Action Buttons Row
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _actionButton(
+                                icon: _isSaved
+                                    ? Icons.bookmark
+                                    : Icons.bookmark_add_outlined,
+                                label: _isSaved ? 'In Library' : 'Add to Library',
+                                isPrimary: _isSaved,
+                                onTap: _toggleSave),
+                            _actionButton(
+                                icon: Icons.public,
+                                label: 'Web View',
+                                onTap: () => launchUrl(Uri.parse(widget.mangaUrl))),
+                            _actionButton(
+                                icon: Icons.sync,
+                                label: 'Migration',
+                                onTap: _showMigrationSheet),
+                            _actionButton(
+                              icon: Icons.download_for_offline,
+                              label: 'Download Menu',
+                              onTap: () => _showDownloadMenu(chapters),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
 
                       // Description
                       GestureDetector(
@@ -432,8 +484,31 @@ class _MangaScreenState extends State<MangaScreen> {
                       style: TextStyle(
                         color: isRead ? Colors.white38 : Colors.white,
                         fontSize: 15,
+                        fontWeight:
+                            isRead ? FontWeight.normal : FontWeight.w600,
                       ),
                     ),
+                    subtitle: chapter.releaseDate != null
+                        ? Row(
+                            children: [
+                              const Icon(
+                                Icons.schedule,
+                                size: 12,
+                                color: Colors.white38,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                chapter.releaseDate!,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white38,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          )
+                        : null,
                     trailing: DownloadDB.isDownloaded(chapter.url)
                         ? const Icon(
                             Icons.check_circle,
@@ -722,6 +797,155 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
+  void _showMigrationSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Migrate Manga',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: FutureBuilder<List<Manga>>(
+                  future: _searchAllSources(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+                    final results = snapshot.data ?? [];
+                    if (results.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No results found in other sources.',
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      controller: scrollController,
+                      itemCount: results.length,
+                      itemBuilder: (context, index) {
+                        final manga = results[index];
+                        return ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: CachedNetworkImage(
+                              imageUrl: manga.coverUrl,
+                              width: 40,
+                              height: 60,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          title: Text(
+                            manga.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: (_dominantColor ?? Colors.deepPurpleAccent).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: (_dominantColor ?? Colors.deepPurpleAccent).withValues(alpha: 0.4),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _getSourceName(manga.sourceId),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MangaScreen(
+                                  mangaTitle: manga.title,
+                                  mangaUrl: manga.url,
+                                  coverUrl: manga.coverUrl,
+                                  sourceId: manga.sourceId,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<List<Manga>> _searchAllSources() async {
+    final sources = ['asuracomic', 'manhuatop', 'manhuaplus'];
+    List<Manga> allResults = [];
+
+    for (var sourceId in sources) {
+      if (sourceId == widget.sourceId) continue;
+      try {
+        final parser = getParserForSite(sourceId);
+        final results = await parser.searchManga(widget.mangaTitle, 1);
+        allResults.addAll(results);
+      } catch (e) {
+        debugPrint('Migration search error for $sourceId: $e');
+      }
+    }
+    return allResults;
+  }
+
   void _showChapterMenu(Chapter chapter, int index) {
     final chapters = _details?.chapters ?? [];
     showModalBottomSheet(
@@ -775,6 +999,81 @@ class _MangaScreenState extends State<MangaScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isPrimary = false,
+  }) {
+    final color = isPrimary
+        ? (_dominantColor ?? Colors.deepPurpleAccent)
+        : Colors.white.withValues(alpha: 0.05);
+    final textColor = isPrimary ? Colors.white : Colors.white70;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 80),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: textColor, size: 22),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDownloadMenu(List<Chapter> chapters) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Download all chapters'),
+              onTap: () {
+                Navigator.pop(context);
+                _downloadChapters(chapters);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.unpublished_outlined),
+              title: const Text('Download all unread'),
+              onTap: () {
+                Navigator.pop(context);
+                _downloadChapters(
+                  chapters.where((c) => !HistoryDB.isRead(c.url)).toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

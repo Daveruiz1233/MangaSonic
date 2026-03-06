@@ -25,6 +25,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
   }
 
   void _onColorChanged(Color color) {
+    if (!mounted) return;
     setState(() {
       if (_isBackgroundMode) {
         _bgColor = color;
@@ -74,15 +75,17 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
             // Color Wheel
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: ColorPicker(
-                pickerColor: _isBackgroundMode ? _bgColor : _accentColor,
-                onColorChanged: _onColorChanged,
-                pickerAreaHeightPercent: 0.8,
-                enableAlpha: false,
-                displayThumbColor: true,
-                paletteType: PaletteType.hsvWithHue,
-                labelTypes: const [],
-                pickerAreaBorderRadius: BorderRadius.circular(200),
+              child: RepaintBoundary(
+                child: ColorPicker(
+                  pickerColor: _isBackgroundMode ? _bgColor : _accentColor,
+                  onColorChanged: _onColorChanged,
+                  pickerAreaHeightPercent: 0.8,
+                  enableAlpha: false,
+                  displayThumbColor: true,
+                  paletteType: PaletteType.hsvWithHue,
+                  labelTypes: const [],
+                  pickerAreaBorderRadius: BorderRadius.circular(200),
+                ),
               ),
             ),
 
@@ -125,6 +128,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                   ),
                 ),
                 onPressed: () {
+                  final themeService = context.read<ThemeService>();
                   themeService.setPrimaryColor(_accentColor);
                   themeService.setBackgroundColor(_bgColor);
                   ScaffoldMessenger.of(context).showSnackBar(

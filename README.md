@@ -20,15 +20,16 @@
 - **Offline-first** — downloaded chapters bypass all networking, rendering directly from local storage
 
 ### 📚 Library & Organization
-- Save manga to categorized shelves with custom categories
-- Track reading progress automatically (read/unread, last page, scroll position)
-- Continue from where you left off with a single tap
+- **Dynamic Hero Section** — Premium "Recently Read" card with automatic accent color extraction from covers
+- **Sleek Grid Design** — Minimalist "Title-on-Cover" layout with gradient overlays
+- **Automatic Updates** — Background scanning for new chapters with "NEW" badges
+- **Smart Deduplication** — Hero Card manga is intelligently removed from the grid to prevent duplication
 
-### 🚀 Parallel Download Manager
-- Download up to **3 manga concurrently** with **4 chapters each** (12 parallel threads)
-- Persistent download queue — survives app restarts
-- Auto-pause/resume on connectivity changes
-- Multi-select bulk delete with per-manga grouping
+### 🚀 Advanced Download Manager
+- **Hero-Style Overview** — Grouped chapters using premium interactive Hero Cards
+- **Granular Control** — Interactive chapter selection with Select-All and cancellation
+- **Parallel Threads** — Up to **3 manga concurrently** with **4 chapters each** (12 threads)
+- **Persistence** —Survives app restarts and auto-resumes on network recovery
 
 ### 🔎 Supported Sources
 | Source | Method |
@@ -37,10 +38,11 @@
 | AsuraComic | React Server Component (RSC) payload parsing |
 | ManhuaPlus | HTML scraping |
 
-### 🎨 Customization
-- Pure dark-mode interface
-- Palette personalizer with color extraction from manga covers
-- Color filters, brightness, and image adjustments in the reader
+### 🎨 Premium UI/UX
+- **Ambient Theming** — Adaptive transparent AppBars and palette-based dynamic UI colors
+- **Unified Migration** — Consistent source tagging acrossinfo and migration sheets
+- **Pure Dark Mode** — High-contrast AMOLED-friendly interface
+- **Deep Controls** — Color filters, brightness, and image adjustments in the reader
 
 ---
 

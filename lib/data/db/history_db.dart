@@ -33,6 +33,7 @@ class HistoryDB {
       isRead: isRead,
       lastPage: lastPage,
       lastPageOffset: lastPageOffset,
+      lastReadTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
     await box.put(chapterUrl, status.toMap());
   }
@@ -53,6 +54,7 @@ class HistoryDB {
       isRead: read,
       lastPage: lastPage,
       lastPageOffset: lastPageOffset,
+      lastReadTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
     await box.put(chapterUrl, status.toMap());
   }
@@ -69,5 +71,12 @@ class HistoryDB {
     final data = box.get(chapterUrl);
     if (data == null) return 0.0;
     return ChapterStatus.fromMap(data).lastPageOffset;
+  }
+
+  static int? getLastReadTimestamp(String chapterUrl) {
+    final box = Hive.box(statusBoxName);
+    final data = box.get(chapterUrl);
+    if (data == null) return null;
+    return ChapterStatus.fromMap(data).lastReadTimestamp;
   }
 }

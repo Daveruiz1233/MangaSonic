@@ -142,8 +142,22 @@ class ManhuaPlusParser extends BaseParser {
       if (url.startsWith('/')) url = '$baseUrl$url';
 
       final title = element.text.trim();
+      String? releaseDate;
+
+      // Madara-like structure has .post-on or .chapter-release-date
+      final parent = element.parent?.parent;
+      if (parent != null) {
+        final dateEl = parent.querySelector('.post-on, .chapter-release-date');
+        releaseDate = dateEl?.text.trim();
+      }
+
       if (url.isNotEmpty) {
-        chapters.add(Chapter(title: title, url: url, mangaUrl: mangaUrl));
+        chapters.add(Chapter(
+          title: title,
+          url: url,
+          mangaUrl: mangaUrl,
+          releaseDate: releaseDate,
+        ));
       }
     }
     return chapters;

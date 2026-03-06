@@ -40,31 +40,18 @@ jobs:
           body: |
             ## 🚀 Manga Sonic ${{ github.ref_name }}
 
-            ### Reader
-            - Seamless infinite scrolling between chapters (both directions)
-            - Pixel-perfect "Continue Reading" position restore
-            - Aggressive image caching with 6000px pre-render zone
-            - Offline-first reading from downloaded chapters
-            - Chapter separators and page counter overlay
+            ### UI & Experience
+            - Sleek "Title-on-Cover" Library grid with gradient overlays
+            - Dynamic Hero Card for "Recently Read" with automatic palette extraction
+            - Transparent adaptive AppBars across all screens
+            - Consistent source tagging and migration sheet styling
 
-            ### Library & Tracking
-            - Categorized manga shelves
-            - Automatic read/unread progress tracking
-            - Per-page scroll position persistence
-
-            ### Download Manager
-            - Parallel downloads (3 manga × 4 chapters = 12 concurrent threads)
-            - Persistent queue with auto-resume on reconnect
-            - Multi-select bulk management with per-manga grouping
-
-            ### Sources
-            - ManhuaTop (HTML scraping)
-            - AsuraComic (RSC payload parsing)
-            - ManhuaPlus (HTML scraping)
-
-            ### Customization
-            - Pure dark-mode UI with palette extraction
-            - Reader color filters, brightness, and image adjustments
+            ### Features & Stability
+            - Background scanning for automatic "NEW" chapter tagging
+            - Intelligent grid deduplication (Hero Card vs Grid)
+            - Reimagined Download Manager with interactive Hero Cards
+            - Multi-select manual management for downloads and library
+            - Fixed selection/cancellation edge cases in Download Manager
 
             ---
             📦 **iOS:** Unsigned IPA provided for sideloading via AltStore/Sideloadly.

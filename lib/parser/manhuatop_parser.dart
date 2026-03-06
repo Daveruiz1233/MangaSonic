@@ -140,8 +140,23 @@ class ManhuaTopParser extends BaseParser {
     for (var element in chapterElements) {
       final url = element.attributes['href'] ?? '';
       final title = element.text.trim();
+      String? releaseDate;
+
+      // Find release date - usually a sibling span with class .chapter-release-date
+      // or inside the same parent container
+      final parent = element.parent?.parent; // .wp-manga-chapter
+      if (parent != null) {
+        final dateEl = parent.querySelector('.chapter-release-date');
+        releaseDate = dateEl?.text.trim();
+      }
+
       if (url.isNotEmpty) {
-        chapters.add(Chapter(title: title, url: url, mangaUrl: mangaUrl));
+        chapters.add(Chapter(
+          title: title,
+          url: url,
+          mangaUrl: mangaUrl,
+          releaseDate: releaseDate,
+        ));
       }
     }
     // WP-Manga usually lists latest first. We'll return it as is.

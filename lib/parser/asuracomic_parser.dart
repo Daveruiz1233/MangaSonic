@@ -127,9 +127,23 @@ class AsuraComicParser extends BaseParser {
       final h3s = element.querySelectorAll('h3');
 
       String chapterName = '';
+      String? releaseDate;
 
       if (h3s.isNotEmpty) {
         chapterName = h3s.first.text.trim();
+        // The first h3 is the title, the second (if exists) is often the date
+        if (h3s.length > 1) {
+          releaseDate = h3s[1].text.trim();
+        } else {
+          // Sometimes date is in a <p> or <span> sibling within the same parent
+          final parent = element.parent;
+          if (parent != null) {
+            final dateEl = parent.querySelector('p, span:not(.font-bold)');
+            if (dateEl != null && dateEl != element) {
+              releaseDate = dateEl.text.trim();
+            }
+          }
+        }
       } else {
         chapterName = element.text
             .trim()
@@ -146,7 +160,12 @@ class AsuraComicParser extends BaseParser {
 
       // Deduplicate by URL
       if (!chapters.any((c) => c.url == url)) {
-        chapters.add(Chapter(title: chapterName, url: url, mangaUrl: mangaUrl));
+        chapters.add(Chapter(
+          title: chapterName,
+          url: url,
+          mangaUrl: mangaUrl,
+          releaseDate: releaseDate,
+        ));
       }
     }
 

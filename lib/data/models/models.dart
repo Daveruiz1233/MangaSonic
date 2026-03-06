@@ -32,13 +32,20 @@ class Chapter {
   final String title;
   final String url;
   final String mangaUrl;
+  final String? releaseDate;
 
-  Chapter({required this.title, required this.url, required this.mangaUrl});
+  Chapter({
+    required this.title,
+    required this.url,
+    required this.mangaUrl,
+    this.releaseDate,
+  });
 
   Map<String, dynamic> toMap() => {
     'title': title,
     'url': url,
     'mangaUrl': mangaUrl,
+    'releaseDate': releaseDate,
   };
 
   factory Chapter.fromMap(Map<dynamic, dynamic> map) {
@@ -46,6 +53,7 @@ class Chapter {
       title: map['title'],
       url: map['url'],
       mangaUrl: map['mangaUrl'],
+      releaseDate: map['releaseDate'],
     );
   }
 }
@@ -55,12 +63,14 @@ class ChapterStatus {
   final bool isRead;
   final int lastPage;
   final double lastPageOffset;
+  final int? lastReadTimestamp;
 
   ChapterStatus({
     required this.chapterUrl,
     this.isRead = false,
     this.lastPage = 0,
     this.lastPageOffset = 0.0,
+    this.lastReadTimestamp,
   });
 
   Map<String, dynamic> toMap() => {
@@ -68,6 +78,7 @@ class ChapterStatus {
     'isRead': isRead,
     'lastPage': lastPage,
     'lastPageOffset': lastPageOffset,
+    'lastReadTimestamp': lastReadTimestamp,
   };
 
   factory ChapterStatus.fromMap(Map<dynamic, dynamic> map) {
@@ -76,6 +87,7 @@ class ChapterStatus {
       isRead: map['isRead'] ?? false,
       lastPage: map['lastPage'] ?? 0,
       lastPageOffset: (map['lastPageOffset'] as num?)?.toDouble() ?? 0.0,
+      lastReadTimestamp: map['lastReadTimestamp'],
     );
   }
 }

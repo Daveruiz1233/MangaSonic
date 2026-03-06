@@ -19,11 +19,11 @@ class ThemeService extends ChangeNotifier {
     final colorValue = _box.get(
       _colorKey,
       defaultValue: Colors.deepPurple.toARGB32(),
-    );
+    ) as int;
     final bgColorValue = _box.get(
       _bgColorKey,
       defaultValue: const Color(0xFF121212).toARGB32(),
-    );
+    ) as int;
 
     _primaryColor = Color(colorValue);
     _backgroundColor = Color(bgColorValue);
@@ -56,10 +56,10 @@ class ThemeService extends ChangeNotifier {
         surface: _backgroundColor,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: _backgroundColor == Colors.black
-            ? Colors.grey[900]
-            : _backgroundColor.withValues(alpha: 0.95),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: _backgroundColor == Colors.black

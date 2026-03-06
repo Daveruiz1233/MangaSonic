@@ -43,6 +43,9 @@ class DownloadManager extends ChangeNotifier {
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
+  // Tracks which chapter URLs have been requested to cancel
+  final Set<String> _cancelledChapters = {};
+
   Future<void> init() async {
     // Load persisted queue
     final savedQueue = QueueDB.getQueue();
@@ -186,15 +189,52 @@ class DownloadManager extends ChangeNotifier {
     }
   }
 
+  Future<void> cancelChapter(String chapterUrl) async {
+    if (_activeChapters.contains(chapterUrl)) {
+      _cancelledChapters.add(chapterUrl);
+    } else {
+      _queue.removeWhere((t) => t.chapterUrl == chapterUrl);
+      await QueueDB.removeFromQueue(chapterUrl);
+    }
+    notifyListeners();
+  }
+
+  Future<void> cancelMangaDownloads(String mangaUrl) async {
+    // Cancel queued ones first
+    _queue.removeWhere((t) {
+      if (t.mangaUrl == mangaUrl && !_activeChapters.contains(t.chapterUrl)) {
+        QueueDB.removeFromQueue(t.chapterUrl);
+        return true;
+      }
+      return false;
+    });
+
+    // Mark active ones for cancellation
+    for (var chapterUrl in _activeChapters) {
+      final task = _queue.firstWhere((t) => t.chapterUrl == chapterUrl);
+      if (task.mangaUrl == mangaUrl) {
+        _cancelledChapters.add(chapterUrl);
+      }
+    }
+    notifyListeners();
+  }
+
   Future<void> _executeSafe(DownloadTask task) async {
+    bool wasCancelled = false;
     try {
       await _executeTask(task);
+      wasCancelled = _cancelledChapters.contains(task.chapterUrl);
     } catch (e) {
       debugPrint('Error processing task ${task.chapterTitle}: $e');
       _statuses.remove(task.chapterUrl);
       notifyListeners();
     } finally {
       _activeChapters.remove(task.chapterUrl);
+      _cancelledChapters.remove(task.chapterUrl);
+
+      // If it was cancelled, we don't necessarily want it removed from queue
+      // if we want to retry later, but "Cancel" usually means "Remove from list".
+      // Let's remove it.
       _queue.removeWhere((t) => t.chapterUrl == task.chapterUrl);
       await QueueDB.removeFromQueue(task.chapterUrl);
     }
@@ -285,6 +325,14 @@ class DownloadManager extends ChangeNotifier {
     const int concurrency = 3; // Reduced for better stability
 
     for (int i = 0; i < imageUrls.length; i += concurrency) {
+      if (_cancelledChapters.contains(task.chapterUrl)) {
+        debugPrint('Cancellation detected for ${task.chapterTitle}');
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+        return;
+      }
+
       final end = (i + concurrency > imageUrls.length)
           ? imageUrls.length
           : i + concurrency;
