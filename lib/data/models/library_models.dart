@@ -16,6 +16,7 @@ class LibraryItem {
   final String coverUrl;
   final String sourceId;
   final String categoryId;
+  final int addedAt;
 
   LibraryItem({
     required this.mangaUrl,
@@ -23,6 +24,7 @@ class LibraryItem {
     required this.coverUrl,
     required this.sourceId,
     required this.categoryId,
+    required this.addedAt,
   });
 
   Map<String, dynamic> toMap() => {
@@ -31,6 +33,7 @@ class LibraryItem {
     'coverUrl': coverUrl,
     'sourceId': sourceId,
     'categoryId': categoryId,
+    'addedAt': addedAt,
   };
 
   factory LibraryItem.fromMap(Map<dynamic, dynamic> map) {
@@ -40,6 +43,7 @@ class LibraryItem {
       coverUrl: map['coverUrl'],
       sourceId: map['sourceId'],
       categoryId: map['categoryId'],
+      addedAt: map['addedAt'] ?? 0,
     );
   }
 }

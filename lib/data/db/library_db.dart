@@ -8,6 +8,12 @@ class LibraryDB {
   static Future<void> init() async {
     await Hive.openBox(categoryBoxName);
     await Hive.openBox(itemBoxName);
+
+    // Ensure Default category exists
+    final box = Hive.box(categoryBoxName);
+    if (box.isEmpty) {
+      await addCategory(LibraryCategory(id: 'default', name: 'Default'));
+    }
   }
 
   // Categories
@@ -32,6 +38,7 @@ class LibraryDB {
           coverUrl: item.coverUrl,
           sourceId: item.sourceId,
           categoryId: '',
+          addedAt: item.addedAt,
         ));
       }
     }

@@ -12,6 +12,7 @@ import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
+import 'package:manga_sonic/ui/widgets/migration_preview_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MangaScreen extends StatefulWidget {
@@ -712,6 +713,7 @@ class _MangaScreenState extends State<MangaScreen> {
           coverUrl: widget.coverUrl,
           sourceId: widget.sourceId,
           categoryId: 'default',
+          addedAt: DateTime.now().millisecondsSinceEpoch,
         );
         await LibraryDB.saveItem(item);
         setState(() => _isSaved = true);
@@ -738,6 +740,7 @@ class _MangaScreenState extends State<MangaScreen> {
                         coverUrl: widget.coverUrl,
                         sourceId: widget.sourceId,
                         categoryId: cat.id,
+                        addedAt: DateTime.now().millisecondsSinceEpoch,
                       );
                       await LibraryDB.saveItem(item);
                       if (context.mounted) {
@@ -903,16 +906,20 @@ class _MangaScreenState extends State<MangaScreen> {
                             ),
                           ),
                           onTap: () {
-                            Navigator.pop(context);
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => MangaScreen(
-                                  mangaTitle: manga.title,
-                                  mangaUrl: manga.url,
-                                  coverUrl: manga.coverUrl,
-                                  sourceId: manga.sourceId,
+                            Navigator.pop(context); // Close search list
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => MigrationPreviewSheet(
+                                targetManga: manga,
+                                sourceManga: Manga(
+                                  title: widget.mangaTitle,
+                                  url: widget.mangaUrl,
+                                  coverUrl: widget.coverUrl,
+                                  sourceId: widget.sourceId,
                                 ),
+                                sourceChapters: _details!.chapters,
                               ),
                             );
                           },
@@ -1011,7 +1018,11 @@ class _MangaScreenState extends State<MangaScreen> {
     final color = isPrimary
         ? (_dominantColor ?? Colors.deepPurpleAccent)
         : Colors.white.withValues(alpha: 0.05);
-    final textColor = isPrimary ? Colors.white : Colors.white70;
+    
+    final isDark = ThemeData.estimateBrightnessForColor(color) == Brightness.dark;
+    final textColor = isPrimary 
+        ? (isDark ? Colors.white : Colors.black) 
+        : Colors.white70;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),

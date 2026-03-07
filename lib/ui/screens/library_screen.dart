@@ -40,9 +40,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   void _loadData() {
     setState(() {
-      final dbCategories = LibraryDB.getCategories()
-          .where((c) => c.id != 'default')
-          .toList();
+      final dbCategories = LibraryDB.getCategories();
       _categories = [
         LibraryCategory(id: 'all', name: 'All'),
         ...dbCategories,
@@ -248,6 +246,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     } else {
       currentItems = filteredItems;
     }
+
+    // Sort by date added (latest first)
+    currentItems.sort((a, b) => b.addedAt.compareTo(a.addedAt));
     final theme = Theme.of(context);
     context.watch<LibraryUpdateService>(); // Trigger rebuild on updates
 
