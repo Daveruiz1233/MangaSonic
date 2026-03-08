@@ -6,9 +6,12 @@ import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/db/queue_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
+import 'package:manga_sonic/data/db/custom_source_db.dart';
 import 'package:manga_sonic/services/theme_service.dart';
+import 'package:manga_sonic/services/nim_ai_service.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 import 'package:manga_sonic/utils/library_update_service.dart';
+import 'package:manga_sonic/utils/source_registry.dart';
 import 'ui/screens/home_screen.dart';
 
 void main() async {
@@ -19,7 +22,10 @@ void main() async {
   await HistoryDB.init();
   await QueueDB.init();
   await MangaCacheDB.init();
+  await CustomSourceDB.init();
+  await NimAiService.init();
   await LibraryUpdateService.init();
+  SourceRegistry.refresh();
 
   final themeService = ThemeService();
   final downloadManager = DownloadManager();

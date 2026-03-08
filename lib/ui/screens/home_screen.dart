@@ -4,6 +4,10 @@ import 'library_screen.dart';
 import 'downloads_screen.dart';
 import 'site_screen.dart';
 import 'palette_personalizer_screen.dart';
+import 'add_source_screen.dart';
+import 'package:manga_sonic/data/db/custom_source_db.dart';
+import 'package:manga_sonic/services/nim_ai_service.dart';
+import 'package:manga_sonic/utils/source_registry.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -110,10 +114,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class SiteListTab extends StatelessWidget {
+class SiteListTab extends StatefulWidget {
   const SiteListTab({super.key});
 
-  final List<Map<String, String>> sites = const [
+  @override
+  State<SiteListTab> createState() => _SiteListTabState();
+}
+
+class _SiteListTabState extends State<SiteListTab> {
+  static const List<Map<String, String>> _builtInSites = [
     {
       'name': 'ManhuaTop',
       'url': 'https://manhuatop.org/',
@@ -133,12 +142,34 @@ class SiteListTab extends StatelessWidget {
     },
   ];
 
+  List<Map<String, String>> _allSites = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSites();
+  }
+
+  void _refreshSites() {
+    final customSources = CustomSourceDB.getSources();
+    final customSiteMaps = customSources.map((s) => {
+          'name': s.name,
+          'url': s.url,
+          'logoUrl': s.logoUrl,
+          'isCustom': 'true',
+        }).toList();
+    setState(() {
+      _allSites = [..._builtInSites, ...customSiteMaps];
+    });
+    SourceRegistry.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: ListView.builder(
-          itemCount: sites.length + 3,
+          itemCount: _allSites.length + 3,
           itemBuilder: (context, index) {
             if (index == 0) {
               return const Padding(
@@ -177,14 +208,22 @@ class SiteListTab extends StatelessWidget {
                 ),
               );
             }
-            if (index == sites.length + 2) {
+            if (index == _allSites.length + 2) {
               return Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 40,
                   vertical: 20,
                 ),
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddSourceScreen(),
+                      ),
+                    );
+                    _refreshSites();
+                  },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Install more sources'),
                   style: ElevatedButton.styleFrom(
@@ -199,7 +238,8 @@ class SiteListTab extends StatelessWidget {
               );
             }
 
-            final site = sites[index - 2];
+            final site = _allSites[index - 2];
+            final isCustom = site['isCustom'] == 'true';
             return Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 12.0,
@@ -256,12 +296,39 @@ class SiteListTab extends StatelessWidget {
                       ),
                     ),
                   ),
-                  title: Text(
-                    site['name']!,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                  title: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          site['name']!,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isCustom) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'CUSTOM',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   subtitle: Text(
                     site['url']!.replaceAll('https://', '').replaceAll('/', ''),
@@ -292,8 +359,15 @@ class SiteListTab extends StatelessWidget {
   }
 }
 
-class SettingsTab extends StatelessWidget {
+class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
+
+  @override
+  State<SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<SettingsTab> {
+  bool _nimKeyConfigured = NimAiService.isConfigured;
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +386,76 @@ class SettingsTab extends StatelessWidget {
                 ),
               );
             },
+          ),
+          ListTile(
+            leading: Icon(
+              _nimKeyConfigured ? Icons.check_circle : Icons.key,
+              color: _nimKeyConfigured ? Colors.green : null,
+            ),
+            title: const Text('NVIDIA NIM API Key'),
+            subtitle: Text(
+              _nimKeyConfigured ? 'Configured' : 'Not set — AI features disabled',
+              style: TextStyle(
+                color: _nimKeyConfigured ? Colors.green : Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+            trailing: _nimKeyConfigured
+                ? const Icon(Icons.check, color: Colors.green, size: 20)
+                : null,
+            onTap: () => _showApiKeyDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showApiKeyDialog(BuildContext context) {
+    final controller = TextEditingController(
+      text: NimAiService.getApiKey() ?? '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        title: const Text('NVIDIA NIM API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your NVIDIA NIM API key to enable AI-powered source detection.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: InputDecoration(
+                hintText: 'nvapi-...',
+                hintStyle: TextStyle(color: Colors.grey[600]),
+                filled: true,
+                fillColor: const Color(0xFF0D1117),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await NimAiService.setApiKey(controller.text.trim());
+              setState(() => _nimKeyConfigured = NimAiService.isConfigured);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
