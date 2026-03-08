@@ -191,51 +191,38 @@ class NimAiService {
   String _buildPrompt(AiConversationContext context, String truncatedHtml) {
     final buffer = StringBuffer();
 
-    buffer.writeln(
-        'SYSTEM: You are a manga website parser engineer. Given a page\'s HTML,');
-    buffer.writeln(
-        'produce CSS selectors that extract manga data.');
+    buffer.writeln('SYSTEM: You are an expert manga website parser engineer.');
+    buffer.writeln('Your goal is to produce a JSON map of CSS selectors for a specific manga site structure.');
+    buffer.writeln('The selectors must be robust and work with the package:html (Dart) library.');
+    buffer.writeln();
+    buffer.writeln('RULES:');
+    buffer.writeln('1. Provide ONLY valid JSON. No conversational text, no markdown blocks.');
+    buffer.writeln('2. If you are unsure about a selector, provide the best guess or an empty string.');
+    buffer.writeln('3. For "chapterImages", if it is a MangaStream/ts_reader site, use "__ts_reader__".');
+    buffer.writeln('4. For "chapterImages", if it is an RSC/Next.js site, use "__script_regex__".');
+    buffer.writeln('5. Use {page} and {query} placeholders in listUrl and searchUrl.');
+    buffer.writeln();
+    buffer.writeln('REQUIRED JSON KEYS:');
+    buffer.writeln('listUrl, searchUrl, mangaList, mangaLink, mangaImage, chapterList, chapterLink, chapterImages, description, author, status, genres');
     buffer.writeln();
     buffer.writeln('CONTEXT:');
     buffer.writeln('- Site URL: ${context.siteUrl}');
-    buffer.writeln(
-        '- Auto-detect result: ${context.templateGuess} (failed / low confidence)');
-    buffer.writeln('- Previous attempts: ${context.attempts.length}');
+    buffer.writeln('- Detected Template: ${context.templateGuess}');
     buffer.writeln();
 
-    // Include full history of previous attempts
-    for (int i = 0; i < context.attempts.length; i++) {
-      final a = context.attempts[i];
-      buffer.writeln('ATTEMPT #${i + 1}:');
-      buffer.writeln('  Approach: ${a.approach}');
-      buffer.writeln(
-          '  Selectors produced: ${jsonEncode(a.selectors)}');
-      if (a.userFeedback != null && a.userFeedback!.isNotEmpty) {
-        buffer.writeln('  User feedback: "${a.userFeedback}"');
+    if (context.attempts.isNotEmpty) {
+      buffer.writeln('PRIOR ATTEMPTS (FAILURE HISTORY):');
+      for (int i = 0; i < context.attempts.length; i++) {
+        final a = context.attempts[i];
+        buffer.writeln('Attempt #${i + 1}:');
+        buffer.writeln('  Selectors: ${jsonEncode(a.selectors)}');
+        if (a.userFeedback?.isNotEmpty ?? false) buffer.writeln('  Feedback: ${a.userFeedback}');
+        if (a.validationResult?.isNotEmpty ?? false) buffer.writeln('  Error: ${a.validationResult}');
       }
-      if (a.validationResult != null && a.validationResult!.isNotEmpty) {
-        buffer.writeln('  Validation: ${a.validationResult}');
-      }
-      buffer.writeln('  → DO NOT repeat this approach.');
-      buffer.writeln();
+      buffer.writeln('\nCRITICAL: Do NOT repeat the failed selectors above. Try a different DOM traversal strategy.');
     }
 
-    buffer.writeln(
-        'INSTRUCTION: Try a DIFFERENT approach than the ones listed above.');
-    buffer.writeln(
-        'Analyze the HTML structure below and produce new CSS selectors.');
-    buffer.writeln(
-        'Return ONLY valid JSON with the selector map. The JSON should have these keys:');
-    buffer.writeln(
-        '  listUrl, searchUrl, mangaList, mangaLink, mangaImage,');
-    buffer.writeln(
-        '  chapterList, chapterLink, chapterImages,');
-    buffer.writeln('  description, author, status, genres');
-    buffer.writeln();
-    buffer.writeln(
-        'For listUrl and searchUrl, use {page} and {query} as placeholders.');
-    buffer.writeln();
-    buffer.writeln('HTML (truncated):');
+    buffer.writeln('\nHTML CONTENT:');
     buffer.writeln(truncatedHtml);
 
     return buffer.toString();

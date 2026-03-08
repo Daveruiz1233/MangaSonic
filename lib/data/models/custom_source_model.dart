@@ -2,6 +2,7 @@
 enum TemplateType {
   madara,
   mangareader,
+  mangastream,
   rsc,
   aiGenerated,
   generic;
@@ -14,6 +15,8 @@ enum TemplateType {
         return TemplateType.madara;
       case 'mangareader':
         return TemplateType.mangareader;
+      case 'mangastream':
+        return TemplateType.mangastream;
       case 'rsc':
         return TemplateType.rsc;
       case 'ai_generated':
@@ -30,6 +33,8 @@ enum TemplateType {
         return 'Madara/WordPress';
       case TemplateType.mangareader:
         return 'MangaReader PHP';
+      case TemplateType.mangastream:
+        return 'MangaStream';
       case TemplateType.rsc:
         return 'RSC/React';
       case TemplateType.aiGenerated:

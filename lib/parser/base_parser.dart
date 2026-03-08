@@ -26,13 +26,17 @@ abstract class BaseParser {
   // Shared HTTP Client with generic User-Agent
   final http.Client client = http.Client();
 
-  Future<http.Response> getRequest(String url) async {
+  Future<http.Response> getRequest(String url, {bool isRetry = false}) async {
     final response = await client.get(
       Uri.parse(url),
       headers: {...CloudflareInterceptor.headers},
     );
 
     if (response.statusCode == 403 || response.statusCode == 429) {
+      if (!isRetry) {
+        await CloudflareInterceptor.bypass(url);
+        return await getRequest(url, isRetry: true);
+      }
       throw Exception(
         'Cloudflare block detected (Status ${response.statusCode})',
       );
@@ -45,6 +49,7 @@ abstract class BaseParser {
     String url, {
     Object? body,
     Map<String, String>? headers,
+    bool isRetry = false,
   }) async {
     final response = await client.post(
       Uri.parse(url),
@@ -56,6 +61,10 @@ abstract class BaseParser {
     );
 
     if (response.statusCode == 403 || response.statusCode == 429) {
+      if (!isRetry) {
+        await CloudflareInterceptor.bypass(url);
+        return await postRequest(url, body: body, headers: headers, isRetry: true);
+      }
       throw Exception(
         'Cloudflare block detected (Status ${response.statusCode})',
       );

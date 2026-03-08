@@ -95,6 +95,67 @@ class TemplateParser extends BaseParser {
         sourceId: source.sourceId,
       ));
     }
+
+    // Layer 4: Heuristic Fallback
+    if (list.isEmpty && source.templateType == TemplateType.generic) {
+      return _runHeuristicMangaList(document);
+    }
+
+    return list;
+  }
+
+  Future<List<Manga>> _runHeuristicMangaList(dynamic document) async {
+    final List<Manga> list = [];
+    final seen = <String>{};
+
+    // Strategy 1: Look for <a> tags containing <img> (Typical for manga grids)
+    final containers = document.querySelectorAll('a');
+    for (var aTag in containers) {
+      final imgTag = aTag.querySelector('img');
+      if (imgTag == null) continue;
+      final href = aTag.attributes['href'] ?? '';
+      if (href.isEmpty ||
+          href == '/' ||
+          href.contains('facebook') ||
+          href.contains('twitter')) continue;
+
+      final url = _resolveUrl(href);
+      if (seen.contains(url)) continue;
+
+      final title = (aTag.attributes['title'] ??
+              imgTag?.attributes['alt'] ??
+              aTag.text.trim())
+          .trim();
+      final cover = _imageAttr(imgTag);
+
+      if (title.length > 2 && cover.isNotEmpty && url.contains('/manga/')) {
+        list.add(Manga(
+            title: title, url: url, coverUrl: cover, sourceId: source.sourceId));
+        seen.add(url);
+      }
+    }
+
+    // Strategy 2: Look for common CSS classes if Strategy 1 found nothing
+    if (list.isEmpty) {
+      final items = document.querySelectorAll('.item, .manga, .book-item, .entry, .bsx');
+      for (var item in items) {
+        final aTag = item.querySelector('a');
+        final imgTag = item.querySelector('img');
+        if (aTag == null || imgTag == null) continue;
+        
+        final url = _resolveUrl(aTag.attributes['href'] ?? '');
+        if (seen.contains(url)) continue;
+        
+        final title = (aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? aTag.text.trim()).trim();
+        final cover = _imageAttr(imgTag);
+        
+        if (title.isNotEmpty && cover.isNotEmpty) {
+           list.add(Manga(title: title, url: url, coverUrl: cover, sourceId: source.sourceId));
+           seen.add(url);
+        }
+      }
+    }
+
     return list;
   }
 
@@ -215,7 +276,41 @@ class TemplateParser extends BaseParser {
 
     final response = await getRequest(mangaUrl);
     final document = html_parser.parse(response.body);
-    return _extractChapters(document, mangaUrl);
+    final chapters = _extractChapters(document, mangaUrl);
+
+    // Layer 4: Heuristic Fallback
+    if (chapters.isEmpty && source.templateType == TemplateType.generic) {
+       return _runHeuristicChapters(document, mangaUrl);
+    }
+    return chapters;
+  }
+
+  Future<List<Chapter>> _runHeuristicChapters(dynamic document, String mangaUrl) async {
+    final List<Chapter> chapters = [];
+    final seen = <String>{};
+    
+    // Look for any link containing "chapter" or numeric patterns
+    final links = document.querySelectorAll('a');
+    for (var a in links) {
+      final href = a.attributes['href'] ?? '';
+      final text = a.text.toLowerCase();
+      if (href.isEmpty) continue;
+      
+      final url = _resolveUrl(href);
+      if (seen.contains(url) || url == mangaUrl) continue;
+      
+      if (text.contains('chapter') || 
+          text.contains('ch.') || 
+          RegExp(r'\d+').hasMatch(text) && text.length < 50) {
+        chapters.add(Chapter(
+          title: a.text.trim(),
+          url: url,
+          mangaUrl: mangaUrl,
+        ));
+        seen.add(url);
+      }
+    }
+    return chapters;
   }
 
   Future<List<Chapter>> _fetchMadaraChapters(String mangaUrl) async {
@@ -246,17 +341,26 @@ class TemplateParser extends BaseParser {
 
     // Tier 3: admin-ajax.php POST
     if (chapterElements.isEmpty) {
-      final idTag = document.querySelector('#manga-chapters-holder');
-      final mangaId = idTag?.attributes['data-id'];
+      final idTag =
+          document.querySelector('#manga-chapters-holder, .wp-manga-data-id');
+      final mangaId = idTag?.attributes['data-id'] ??
+          idTag?.attributes['value'] ??
+          _regexFetch(response.body, r'manga_id\s*=\s*(\d+)');
       if (mangaId != null) {
         final baseUri = Uri.parse(baseUrl);
-        response = await postRequest(
-          '${baseUri.scheme}://${baseUri.host}/wp-admin/admin-ajax.php',
-          body: {'action': 'manga_get_chapters', 'manga': mangaId},
-          headers: {'X-Requested-With': 'XMLHttpRequest'},
-        );
-        document = html_parser.parse(response.body);
-        chapterElements = document.querySelectorAll(chapterSelector);
+        final adminUrl =
+            '${baseUri.scheme}://${baseUri.host}/wp-admin/admin-ajax.php';
+        try {
+          response = await postRequest(
+            adminUrl,
+            body: {'action': 'manga_get_chapters', 'manga': mangaId},
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+          );
+          document = html_parser.parse(response.body);
+          chapterElements = document.querySelectorAll(chapterSelector);
+        } catch (e) {
+          debugPrint('TemplateParser: admin-ajax failed: $e');
+        }
       }
     }
 
@@ -379,6 +483,12 @@ class TemplateParser extends BaseParser {
       return _extractRscImages(document);
     }
 
+    // MangaStream: ts_reader.run() extraction
+    if (imagesSelector == '__ts_reader__' ||
+        source.templateType == TemplateType.mangastream) {
+      return _extractMangaStreamImages(document);
+    }
+
     // Standard CSS selector-based extraction
     if (imagesSelector.isNotEmpty) {
       final images = document.querySelectorAll(imagesSelector);
@@ -386,6 +496,28 @@ class TemplateParser extends BaseParser {
       for (var img in images) {
         final src = _imageAttr(img);
         if (src.isNotEmpty) {
+          list.add(_resolveUrl(src));
+        }
+      }
+      return list;
+    }
+
+    // Layer 4: Heuristic Fallback - try EVERYTHING
+    if (source.templateType == TemplateType.generic) {
+      // 1. Try ts_reader (MangaStream)
+      final msImages = _extractMangaStreamImages(document);
+      if (msImages.isNotEmpty) return msImages;
+      
+      // 2. Try RSC (Next.js)
+      final rscImages = _extractRscImages(document);
+      if (rscImages.isNotEmpty) return rscImages;
+      
+      // 3. Fallback to all images in body
+      final allImages = document.querySelectorAll('img');
+      final List<String> list = [];
+      for (var img in allImages) {
+        final src = _imageAttr(img);
+        if (src.isNotEmpty && _looksLikeMangaImage(src)) {
           list.add(_resolveUrl(src));
         }
       }
@@ -440,6 +572,49 @@ class TemplateParser extends BaseParser {
 
     pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
     return pages.map((p) => p.url).toList();
+  }
+
+  List<String> _extractMangaStreamImages(dynamic document) {
+    final scripts = document.querySelectorAll('script');
+    for (var script in scripts) {
+      final text = script.text;
+      if (text.contains('ts_reader.run')) {
+        try {
+          // Find the JSON-like object inside ts_reader.run({...})
+          final match = RegExp(r'ts_reader\.run\s*\(([\s\S]*?)\)\s*;')
+              .firstMatch(text);
+          if (match != null) {
+            final jsonStr = match.group(1)!;
+            // This is often a JS object, not strict JSON. Let's try to regex out the images array.
+            final imagesMatch =
+                RegExp(r'"images"\s*:\s*\[([\s\S]*?)\]').firstMatch(jsonStr);
+            if (imagesMatch != null) {
+              final content = imagesMatch.group(1)!;
+              final urls = RegExp(r'"(https?://[^"]+)"')
+                  .allMatches(content)
+                  .map((m) => m.group(1)!)
+                  .toList();
+              if (urls.isNotEmpty) return urls;
+            }
+          }
+        } catch (e) {
+          debugPrint('TemplateParser: ts_reader parsing failed: $e');
+        }
+      }
+    }
+
+    // Fallback to standard images
+    final images = document.querySelectorAll('#readerarea img, .page-chapter img');
+    return images
+        .map((img) => _imageAttr(img))
+        .where((src) => src.isNotEmpty)
+        .map((src) => _resolveUrl(src))
+        .toList();
+  }
+
+  String? _regexFetch(String text, String pattern) {
+    final match = RegExp(pattern).firstMatch(text);
+    return match?.group(1);
   }
 
   bool _looksLikeMangaImage(String url) {

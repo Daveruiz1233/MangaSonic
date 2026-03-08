@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:manga_sonic/data/models/custom_source_model.dart';
@@ -38,18 +39,48 @@ class SiteTemplateDetector {
   final http.Client _client = http.Client();
 
   Future<http.Response> _get(String url) async {
-    return await _client.get(
+    debugPrint('SiteTemplateDetector: Fetching $url');
+    return http.get(
       Uri.parse(url),
-      headers: {...CloudflareInterceptor.headers},
-    );
+      headers: {
+        ...CloudflareInterceptor.headers,
+      },
+    ).timeout(const Duration(seconds: 15));
   }
 
   /// Detect the template for a given base URL.
-  Future<DetectionResult> detect(String baseUrl) async {
-    final normalizedUrl =
-        baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+  Future<DetectionResult> detect(String baseUrl, {bool isRetry = false}) async {
+    final normalizedUrl = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
 
-    final response = await _get(normalizedUrl);
+    http.Response response;
+    try {
+      response = await _get(normalizedUrl);
+
+      // Layer 1: Cloudflare Bypass
+      if (response.statusCode == 403 || response.statusCode == 429) {
+        if (!isRetry) {
+          debugPrint(
+              'SiteTemplateDetector: Cloudflare block (${response.statusCode}). Attempting bypass...');
+          await CloudflareInterceptor.bypass(normalizedUrl);
+          return await detect(baseUrl, isRetry: true);
+        } else {
+          throw Exception('Cloudflare bypass failed for $baseUrl after retry');
+        }
+      }
+    } catch (e) {
+      if (e.toString().contains('Cloudflare block detected')) {
+        if (!isRetry) {
+          debugPrint(
+              'SiteTemplateDetector: Interceptor threw block. Attempting bypass...');
+          await CloudflareInterceptor.bypass(normalizedUrl);
+          return await detect(baseUrl, isRetry: true);
+        } else {
+          throw Exception('Cloudflare bypass failed for $baseUrl');
+        }
+      }
+      rethrow;
+    }
+
     final rawHtml = response.body;
     final document = html_parser.parse(rawHtml);
     final bodyText = document.body?.outerHtml ?? '';
@@ -67,7 +98,20 @@ class SiteTemplateDetector {
       );
     }
 
-    // --- Priority 2: MangaReader PHP ---
+    // --- Priority 2: MangaStream (ts_reader) ---
+    if (_isMangaStream(bodyText)) {
+      final selectors = _mangaStreamSelectors(normalizedUrl);
+      final samples = _extractMangaStreamSamples(document, normalizedUrl);
+      return DetectionResult(
+        templateType: TemplateType.mangastream,
+        confidence: samples.isNotEmpty ? 0.95 : 0.75,
+        extractedSelectors: selectors,
+        sampleManga: samples,
+        rawHtml: rawHtml,
+      );
+    }
+
+    // --- Priority 3: MangaReader PHP ---
     if (_isMangaReaderPhp(bodyText)) {
       final selectors = _mangaReaderSelectors(normalizedUrl);
       final samples = _extractMangaReaderSamples(document, normalizedUrl);
@@ -80,7 +124,7 @@ class SiteTemplateDetector {
       );
     }
 
-    // --- Priority 3: RSC / React (Next.js) ---
+    // --- Priority 4: RSC / React (Next.js) ---
     if (_isRsc(bodyText)) {
       final selectors = _rscSelectors(normalizedUrl);
       final samples = _extractRscSamples(document, normalizedUrl);
@@ -116,15 +160,24 @@ class SiteTemplateDetector {
   bool _isMangaReaderPhp(String html) {
     return html.contains('#nt_listchapter') ||
         html.contains('.page-chapter') ||
-        html.contains('/all-manga/') ||
-        html.contains('nt_listchapter');
+        html.contains('/all-manga/');
+  }
+
+  bool _isMangaStream(String html) {
+    return html.contains('ts_reader.run') ||
+        html.contains('.bsx') ||
+        html.contains('.bixbox') ||
+        html.contains('.eplister') ||
+        html.contains('series/') && html.contains('genre/');
   }
 
   bool _isRsc(String html) {
     return html.contains('__next') ||
         html.contains('__NEXT_DATA__') ||
         html.contains('_buildManifest') ||
-        html.contains('react') && html.contains('hydrat');
+        html.contains('react') && html.contains('hydrat') ||
+        html.contains('reaper-') ||
+        html.contains('series-list');
   }
 
   // ── Preset selector bundles ───────────────────────────────
@@ -133,10 +186,10 @@ class SiteTemplateDetector {
     return {
       'listUrl': '${baseUrl}manga/page/{page}/',
       'searchUrl': '$baseUrl?s={query}&post_type=wp-manga',
-      'mangaList': '.page-item-detail, .c-tabs-item__content, .item',
+      'mangaList': '.page-item-detail, .c-tabs-item__content, .item, .manga, .book-item',
       'mangaLink': 'a',
       'mangaImage': 'img',
-      'chapterList': '.wp-manga-chapter a',
+      'chapterList': '.wp-manga-chapter a, ul.main li.wp-manga-chapter a',
       'chapterLink': 'a',
       'chapterImages': '.page-break img, .reading-content img',
       'description': '.description-summary, .summary__content p',
@@ -157,9 +210,26 @@ class SiteTemplateDetector {
       'chapterLink': 'a',
       'chapterImages': '.page-chapter img',
       'description': '.detail-content p',
-      'author': '.list-info li:has(.col-xs-4:contains("Author")) .col-xs-8',
-      'status': '.list-info li:has(.col-xs-4:contains("Status")) .col-xs-8',
-      'genres': '.list-info li:has(.col-xs-4:contains("Genres")) .col-xs-8 a',
+      'author': '.list-info li', // Will be refined in parser if needed
+      'status': '.list-info li',
+      'genres': '.list-info a',
+    };
+  }
+
+  static Map<String, String> _mangaStreamSelectors(String baseUrl) {
+    return {
+      'listUrl': '${baseUrl}manga/?page={page}&order=update',
+      'searchUrl': '${baseUrl}?s={query}',
+      'mangaList': '.bsx, .listupd .item',
+      'mangaLink': 'a',
+      'mangaImage': 'img',
+      'chapterList': '.eplister li a, #chapterlist li a',
+      'chapterLink': 'a',
+      'chapterImages': '__ts_reader__',
+      'description': '.entry-content p, .seriestext',
+      'author': '.infotable tr, .fmed span',
+      'status': '.infotable tr, .fmed span',
+      'genres': '.mgen a',
     };
   }
 
@@ -167,18 +237,18 @@ class SiteTemplateDetector {
     return {
       'listUrl': '${baseUrl}series?page={page}',
       'searchUrl': '${baseUrl}series?name={query}&page={page}',
-      'mangaList': 'div[class*="grid-cols"]',
-      'mangaLink': 'a[href*="series/"]',
+      'mangaList': 'div[class*="grid-cols"], div[class*="MuiGrid-"], .manga-card, .list-item',
+      'mangaLink': 'a[href*="series/"], a[href*="manga/"]',
       'mangaImage': 'img',
-      'chapterList': 'a[href*="/chapter/"]',
+      'chapterList': 'a[href*="/chapter/"], a[href*="/read/"]',
       'chapterLink': 'a',
       'chapterImages': '__script_regex__',
       'imageUrlPattern':
-          r'https?://[^\s"]+/storage/media/\d+/conversions/\d+-optimized\.webp',
-      'description': 'span[class*="text-"]',
+          r'https?://[^\s"]+(?:/storage/media/\d+/|/images/chapters/)[^\s"]+',
+      'description': 'span[class*="text-"], .description, .summary',
       'author': '',
       'status': '',
-      'genres': 'button[class*="bg-"]',
+      'genres': 'button[class*="bg-"], .genres a',
     };
   }
 
@@ -190,6 +260,8 @@ class SiteTemplateDetector {
         return _madaraSelectors(baseUrl);
       case TemplateType.mangareader:
         return _mangaReaderSelectors(baseUrl);
+      case TemplateType.mangastream:
+        return _mangaStreamSelectors(baseUrl);
       case TemplateType.rsc:
         return _rscSelectors(baseUrl);
       default:
@@ -244,6 +316,33 @@ class SiteTemplateDetector {
           samples.add(SampleManga(
             title: title,
             url: url,
+            coverUrl: coverUrl,
+          ));
+        }
+      }
+      if (samples.length >= 6) break;
+    }
+    return samples;
+  }
+
+  List<SampleManga> _extractMangaStreamSamples(
+      dynamic document, String baseUrl) {
+    final elements = document.querySelectorAll('.bsx, .listupd .item');
+    final List<SampleManga> samples = [];
+    for (var element in elements) {
+      final aTag = element.querySelector('a');
+      final imgTag = element.querySelector('img');
+      if (aTag != null && imgTag != null) {
+        final url = aTag.attributes['href'] ?? '';
+        final title = aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? '';
+        final coverUrl = imgTag.attributes['src'] ??
+            imgTag.attributes['data-lazy-src'] ??
+            imgTag.attributes['data-src'] ??
+            '';
+        if (url.isNotEmpty && title.isNotEmpty) {
+          samples.add(SampleManga(
+            title: title.trim(),
+            url: _resolveUrl(url, baseUrl),
             coverUrl: coverUrl,
           ));
         }
