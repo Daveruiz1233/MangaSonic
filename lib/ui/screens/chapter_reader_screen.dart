@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
@@ -428,6 +427,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                             return _buildPageWidget(_backwardPages[index]);
                           },
                           childCount: _backwardPages.length,
+                          addAutomaticKeepAlives: true,
                           findChildIndexCallback: (Key key) {
                             final idx = _backwardPages.indexWhere(
                               (p) => p.key == key,
@@ -444,6 +444,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                             return _buildPageWidget(_forwardPages[index]);
                           },
                           childCount: _forwardPages.length,
+                          addAutomaticKeepAlives: true,
                           findChildIndexCallback: (Key key) {
                             final idx = _forwardPages.indexWhere(
                               (p) => p.key == key,
@@ -551,7 +552,10 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
     return RepaintBoundary(
       key: page.key,
-      child: _StableImage(page: page),
+      child: _StableImage(
+        key: ValueKey(page.url ?? page.file?.path ?? page.chapterUrl),
+        page: page,
+      ),
     );
   }
 }
@@ -563,17 +567,21 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 /// relayout that could push other items around.
 class _StableImage extends StatefulWidget {
   final ReaderPage page;
-  const _StableImage({required this.page});
+  const _StableImage({super.key, required this.page});
 
   @override
   State<_StableImage> createState() => _StableImageState();
 }
 
-class _StableImageState extends State<_StableImage> {
+class _StableImageState extends State<_StableImage> with AutomaticKeepAliveClientMixin {
   double? _aspectRatio;
 
   @override
+  bool get wantKeepAlive => _aspectRatio != null;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -604,7 +612,7 @@ class _StableImageState extends State<_StableImage> {
         width: double.infinity,
         cacheWidth: 1200,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _errorWidget(),
+        errorBuilder: (_, _, _) => _errorWidget(),
       );
     }
     return CachedNetworkImage(
@@ -614,8 +622,8 @@ class _StableImageState extends State<_StableImage> {
       memCacheWidth: 1200,
       fadeInDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
-      placeholder: (_, __) => const SizedBox.shrink(),
-      errorWidget: (_, __, ___) => _errorWidget(),
+      placeholder: (_, _) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => _errorWidget(),
     );
   }
 
@@ -629,11 +637,11 @@ class _StableImageState extends State<_StableImage> {
         gaplessPlayback: true,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (frame != null) {
-            _resolveSize(FileImage(widget.page.file!), availableWidth);
+            _resolveSize(FileImage(widget.page.file!), availableWidth, context);
           }
           return frame != null ? child : _loadingWidget();
         },
-        errorBuilder: (_, __, ___) => _errorWidget(),
+        errorBuilder: (_, _, _) => _errorWidget(),
       );
     }
 
@@ -645,27 +653,49 @@ class _StableImageState extends State<_StableImage> {
       fadeInDuration: Duration.zero,
       placeholderFadeInDuration: Duration.zero,
       imageBuilder: (context, imageProvider) {
-        _resolveSize(imageProvider, availableWidth);
+        _resolveSize(imageProvider, availableWidth, context);
         return Image(
           image: imageProvider,
           fit: BoxFit.contain,
           width: double.infinity,
         );
       },
-      placeholder: (_, __) => _loadingWidget(),
-      errorWidget: (_, __, ___) => _errorWidget(),
+      placeholder: (_, _) => _loadingWidget(),
+      errorWidget: (_, _, _) => _errorWidget(),
     );
   }
 
-  void _resolveSize(ImageProvider provider, double availableWidth) {
+  void _resolveSize(ImageProvider provider, double availableWidth, BuildContext context) {
     if (_aspectRatio != null) return;
     final stream = provider.resolve(const ImageConfiguration());
     late ImageStreamListener listener;
+    
+    // Grab scroll position if it exists
+    final scrollPosition = Scrollable.maybeOf(context)?.position;
+
     listener = ImageStreamListener((info, _) {
       final w = info.image.width.toDouble();
       final h = info.image.height.toDouble();
       if (w > 0 && h > 0 && mounted) {
-        setState(() => _aspectRatio = w / h);
+        final newAspect = w / h;
+        final heightDelta = (availableWidth / newAspect) - 600.0;
+
+        setState(() => _aspectRatio = newAspect);
+
+        // Compensate scroll if we are above viewport center
+        if (scrollPosition != null && heightDelta.abs() > 1.0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final box = context.findRenderObject() as RenderBox?;
+            if (box != null && box.hasSize) {
+              final pos = box.localToGlobal(Offset.zero);
+              // If image is above viewport, adjust scroll
+              if (pos.dy < 0) {
+                scrollPosition.correctBy(heightDelta);
+              }
+            }
+          });
+        }
       }
       stream.removeListener(listener);
     });

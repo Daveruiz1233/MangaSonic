@@ -3,9 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/data/models/models.dart';
-import 'package:manga_sonic/parser/asuracomic_parser.dart';
-import 'package:manga_sonic/parser/manhuatop_parser.dart';
-import 'package:manga_sonic/parser/manhuaplus_parser.dart';
+import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:hive/hive.dart';
 
 class LibraryUpdateService extends ChangeNotifier {
@@ -33,8 +31,13 @@ class LibraryUpdateService extends ChangeNotifier {
         _currentManga = item.title;
         notifyListeners();
 
-        final parser = _getParser(item.sourceId);
-        if (parser == null) continue;
+        late final dynamic parser;
+        try {
+          parser = getParserForSite(item.sourceId);
+        } catch (e) {
+          debugPrint('Unknown source for update: ${item.sourceId}');
+          continue;
+        }
 
         try {
           final freshDetails = await parser.getMangaDetails(item.mangaUrl);
@@ -61,14 +64,6 @@ class LibraryUpdateService extends ChangeNotifier {
     }
   }
 
-  dynamic _getParser(String sourceId) {
-    switch (sourceId) {
-      case 'asura': return AsuraComicParser();
-      case 'manhuatop': return ManhuaTopParser();
-      case 'manhuaplus': return ManhuaPlusParser();
-      default: return null;
-    }
-  }
 
   static bool hasUpdate(String mangaUrl) {
     return Hive.box(updateBoxName).get(mangaUrl, defaultValue: false) as bool;

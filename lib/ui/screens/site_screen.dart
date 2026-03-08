@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
+import 'package:manga_sonic/ui/widgets/manga_grid_card.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
@@ -37,6 +37,13 @@ class _SiteScreenState extends State<SiteScreen> {
         _fetchData();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
@@ -139,7 +146,9 @@ class _SiteScreenState extends State<SiteScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final manga = _mangas[index];
-                return GestureDetector(
+                return MangaGridCard(
+                  title: manga.title,
+                  coverUrl: manga.coverUrl,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -153,35 +162,6 @@ class _SiteScreenState extends State<SiteScreen> {
                       ),
                     );
                   },
-                  child: Card(
-                    color: Colors.grey[900],
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: CachedNetworkImage(
-                            imageUrl: manga.coverUrl,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 300,
-                            placeholder: (context, url) =>
-                                Container(color: Colors.deepPurple[800]),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Text(
-                            manga.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),

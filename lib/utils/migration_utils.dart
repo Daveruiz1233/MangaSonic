@@ -3,16 +3,9 @@ import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
+import 'package:manga_sonic/utils/chapter_utils.dart';
 
 class MigrationUtils {
-  static double? _extractChapterNumber(String title) {
-    // Matches "Chapter 123", "Ch. 123", "123.5", etc.
-    final match = RegExp(r'(\d+(\.\d+)?)').firstMatch(title);
-    if (match != null) {
-      return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
 
   static Future<void> transferProgress({
     required Manga oldManga,
@@ -25,8 +18,8 @@ class MigrationUtils {
     // 1. Map old chapters by number
     final Map<double, String> oldProgress = {};
     for (var ch in oldChapters) {
-      final num = _extractChapterNumber(ch.title);
-      if (num != null) {
+      final num = ChapterUtils.extractNumber(ch.title);
+      if (num > 0) {
         oldProgress[num] = ch.url;
       }
     }
@@ -34,8 +27,8 @@ class MigrationUtils {
     // 2. Match new chapters and copy status
     int transferredCount = 0;
     for (var ch in newChapters) {
-      final num = _extractChapterNumber(ch.title);
-      if (num != null && oldProgress.containsKey(num)) {
+      final num = ChapterUtils.extractNumber(ch.title);
+      if (num > 0 && oldProgress.containsKey(num)) {
         final oldUrl = oldProgress[num]!;
         
         // Copy Read status

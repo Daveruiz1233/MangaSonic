@@ -11,6 +11,7 @@ BaseParser getParserForSite(String siteName) {
   switch (normalized) {
     case 'manhuatop':
       return ManhuaTopParser();
+    case 'asura':
     case 'asuracomic':
     case 'asurascan':
     case 'asurascans':

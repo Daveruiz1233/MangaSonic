@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:palette_generator/palette_generator.dart';
+import 'package:manga_sonic/utils/palette_utils.dart';
 import 'package:manga_sonic/data/models/models.dart';
 
 enum HeroCardMode { reading, downloading }
@@ -58,31 +58,21 @@ class _HeroCardState extends State<HeroCard> {
   @override
   void initState() {
     super.initState();
-    _extractPalette();
+    PaletteUtils.extractDominantColor(widget.manga.coverUrl).then((color) {
+      if (mounted && color != null) setState(() => _vibrantColor = color);
+    });
   }
 
   @override
   void didUpdateWidget(HeroCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.manga.coverUrl != widget.manga.coverUrl) {
-      _extractPalette();
+      PaletteUtils.extractDominantColor(widget.manga.coverUrl).then((color) {
+        if (mounted && color != null) setState(() => _vibrantColor = color);
+      });
     }
   }
 
-  Future<void> _extractPalette() async {
-    try {
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(
-        CachedNetworkImageProvider(widget.manga.coverUrl),
-        maximumColorCount: 10,
-      );
-      if (mounted) {
-        setState(() {
-          _vibrantColor = paletteGenerator.vibrantColor?.color ?? 
-                          paletteGenerator.dominantColor?.color;
-        });
-      }
-    } catch (_) {}
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
-import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
 import 'package:manga_sonic/ui/widgets/hero_card.dart';
 import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
 import 'package:manga_sonic/utils/library_update_service.dart';
+import 'package:manga_sonic/utils/recently_read_resolver.dart';
+import 'package:manga_sonic/ui/mixins/selection_mode_mixin.dart';
+import 'package:manga_sonic/ui/widgets/manga_grid_card.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -19,14 +19,11 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
   late List<LibraryCategory> _categories;
   late List<LibraryItem> _items;
   String _selectedCategoryId = 'all';
 
-  // Selection state
-  bool _isSelectionMode = false;
-  final Set<String> _selectedIds = {};
 
   // Search state
   final TextEditingController _searchController = TextEditingController();
@@ -53,24 +50,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     });
   }
 
-  void _toggleSelection(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-        if (_selectedIds.isEmpty) _isSelectionMode = false;
-      } else {
-        _selectedIds.add(id);
-        _isSelectionMode = true;
-      }
-    });
-  }
 
   void _deleteSelected() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Selected?'),
-        content: Text('Remove ${_selectedIds.length} items from library?'),
+        content: Text('Remove ${selectedIds.length} items from library?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -78,10 +64,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           TextButton(
             onPressed: () async {
-              for (final id in _selectedIds) {
+              for (final id in selectedIds) {
                 await LibraryDB.removeItem(id);
               }
-              _selectedIds.clear();
+              exitSelectionMode();
               _loadData();
               if (context.mounted) {
                 Navigator.pop(context);
@@ -138,99 +124,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Map<String, dynamic>? _getRecentlyRead() {
-    final statusBox = Hive.box('chapter_statuses');
-    if (statusBox.isEmpty) return null;
-
-    String? bestChapterUrl;
-    int maxTimestamp = -1;
-    ChapterStatus? bestStatus;
-
-    // 1. Find the absolute latest read chapter
-    for (var key in statusBox.keys) {
-      final data = statusBox.get(key);
-      if (data == null) continue;
-      final status = ChapterStatus.fromMap(data);
-      
-      int ts = status.lastReadTimestamp ?? (status.isRead ? 1 : -1);
-      
-      if (ts > maxTimestamp) {
-        maxTimestamp = ts;
-        bestChapterUrl = key as String;
-        bestStatus = status;
-      }
-    }
-
-    if (bestChapterUrl == null || bestStatus == null) return null;
-
-    // 2. Resolve Bibliographic Info
-    LibraryItem? matchedItem;
-    MangaDetails? matchedDetails;
-    String? mangaUrl;
-
-    for (final item in _items) {
-      if (bestChapterUrl == item.mangaUrl || 
-          bestChapterUrl.startsWith(item.mangaUrl) ||
-          bestChapterUrl.contains(item.mangaUrl.replaceAll('manga/', ''))) {
-        matchedItem = item;
-        mangaUrl = item.mangaUrl;
-        break;
-      }
-    }
-
-    if (mangaUrl == null) {
-      final cacheBox = Hive.box('manga_details_cache');
-      for (var key in cacheBox.keys) {
-        final detailsMap = cacheBox.get(key);
-        if (detailsMap == null) continue;
-        final details = MangaDetails.fromMap(detailsMap);
-        if (details.chapters.any((c) => c.url == bestChapterUrl)) {
-          matchedDetails = details;
-          mangaUrl = key as String;
-          break;
-        }
-      }
-    }
-
-    if (mangaUrl == null && matchedItem == null) return null;
-
-    final title = matchedItem?.title ?? (matchedDetails != null ? matchedDetails.description.split('\n')[0] : 'Manga');
-    final cover = matchedItem?.coverUrl ?? '';
-    final source = matchedItem?.sourceId ?? 'unknown';
-
-    final details = matchedDetails ?? MangaCacheDB.getDetails(mangaUrl!);
-    final chapter = details?.chapters.firstWhere(
-      (c) => c.url == bestChapterUrl,
-      orElse: () => Chapter(
-        title: 'Last Chapter',
-        url: bestChapterUrl!,
-        mangaUrl: mangaUrl ?? '',
-      ),
-    ) ?? Chapter(
-        title: 'Last Chapter',
-        url: bestChapterUrl!,
-        mangaUrl: mangaUrl ?? '',
-      );
-
-    return {
-      'manga': Manga(
-        title: title,
-        url: mangaUrl ?? '',
-        coverUrl: cover,
-        sourceId: source,
-      ),
-      'chapter': chapter,
-      'page': bestStatus.lastPage,
-      'description': details?.description ?? '',
-    };
-  }
 
   @override
   Widget build(BuildContext context) {
     final searchQuery = _searchController.text.toLowerCase();
     
-    final recentlyRead = _getRecentlyRead();
-    final recentlyReadUrl = recentlyRead?['manga']?.url;
+    final recentlyRead = RecentlyReadResolver.resolve(_items);
+    final recentlyReadUrl = recentlyRead?.manga.url;
 
     final filteredItems = _items.where((i) {
       final matchesCategory = _selectedCategoryId == 'all' || i.categoryId == _selectedCategoryId;
@@ -265,8 +165,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 },
               )
             : null,
-        title: _isSelectionMode
-            ? Text('${_selectedIds.length} Selected')
+        title: isSelecting
+            ? Text('${selectedIds.length} Selected')
             : _isSearching
                 ? TextField(
                     controller: _searchController,
@@ -283,7 +183,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     'Library',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-        actions: _isSelectionMode
+        actions: isSelecting
             ? [
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
@@ -291,10 +191,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  onPressed: () => setState(() {
-                    _isSelectionMode = false;
-                    _selectedIds.clear();
-                  }),
+                  onPressed: exitSelectionMode,
                 ),
               ]
             : [
@@ -352,7 +249,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   final isSelected = cat.id == _selectedCategoryId;
                   return GestureDetector(
                     onTap: () {
-                      if (_isSelectionMode) return;
+                      if (isSelecting) return;
                       setState(() => _selectedCategoryId = cat.id);
                     },
                     child: Container(
@@ -389,12 +286,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
           if (recentlyRead != null && !_isSearching)
             SliverToBoxAdapter(
               child: HeroCard(
-                manga: recentlyRead['manga'],
-                lastChapter: recentlyRead['chapter'],
-                lastPage: recentlyRead['page'],
-                description: recentlyRead['description'],
+                manga: recentlyRead.manga,
+                lastChapter: recentlyRead.chapter,
+                lastPage: recentlyRead.lastPage,
+                description: recentlyRead.description,
                 onTap: () {
-                  final manga = recentlyRead['manga'] as Manga;
+                  final manga = recentlyRead.manga;
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -408,10 +305,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ).then((_) => _loadData());
                 },
                 onContinue: () {
-                  final manga = recentlyRead['manga'] as Manga;
+                  final manga = recentlyRead.manga;
                   final details = MangaCacheDB.getDetails(manga.url);
                   if (details != null) {
-                    final chapter = recentlyRead['chapter'] as Chapter;
+                    final chapter = recentlyRead.chapter;
                     final index =
                         details.chapters.indexWhere((c) => c.url == chapter.url);
                     if (index != -1) {
@@ -421,7 +318,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                           builder: (_) => ChapterReaderScreen(
                             allChapters: details.chapters,
                             initialIndex: index,
-                            initialPage: recentlyRead['page'],
+                            initialPage: recentlyRead.lastPage,
                             initialOffset: HistoryDB.getLastPageOffset(
                               chapter.url,
                             ),
@@ -447,12 +344,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final item = currentItems[index];
-                  final isSelected = _selectedIds.contains(item.mangaUrl);
+                  final isSelected = selectedIds.contains(item.mangaUrl);
 
-                  return GestureDetector(
+                  return MangaGridCard(
+                    title: item.title,
+                    coverUrl: item.coverUrl,
+                    isSelected: isSelected,
+                    hasUpdate: LibraryUpdateService.hasUpdate(item.mangaUrl),
                     onTap: () {
-                      if (_isSelectionMode) {
-                        _toggleSelection(item.mangaUrl);
+                      if (isSelecting) {
+                        toggleSelection(item.mangaUrl);
                       } else {
                         Navigator.push(
                           context,
@@ -467,112 +368,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         ).then((value) => _loadData());
                       }
                     },
-                    onLongPress: () => _toggleSelection(item.mangaUrl),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CachedNetworkImage(
-                              imageUrl: item.coverUrl,
-                              fit: BoxFit.cover,
-                              memCacheWidth: 300,
-                              placeholder: (context, url) => Container(
-                                color: theme.primaryColor.withValues(alpha: 0.1),
-                              ),
-                              errorWidget: (context, url, error) =>
-                                  const Icon(Icons.error, color: Colors.white24),
-                            ),
-                            // Gradient Overlay
-                            Positioned(
-                              left: -5,
-                              right: -5,
-                              bottom: -5,
-                              child: Container(
-                                height: 75,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withValues(alpha: 0.8),
-                                      Colors.black,
-                                    ],
-                                  ),
-                                ),
-                                padding: const EdgeInsets.fromLTRB(8, 20, 8, 8),
-                                child: Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.2,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black,
-                                        blurRadius: 4,
-                                        offset: Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (isSelected)
-                              Positioned.fill(
-                                child: Container(
-                                  color: theme.primaryColor.withValues(alpha: 0.2),
-                                  child: Center(
-                                    child: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: theme.primaryColor,
-                                      child: const Icon(Icons.check, color: Colors.white, size: 24),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (LibraryUpdateService.hasUpdate(item.mangaUrl))
-                              Positioned(
-                                top: 6,
-                                right: 6,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: theme.primaryColor,
-                                    borderRadius: BorderRadius.circular(4),
-                                    boxShadow: const [
-                                      BoxShadow(color: Colors.black45, blurRadius: 4),
-                                    ],
-                                  ),
-                                  child: const Text(
-                                    'NEW',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    onLongPress: () => toggleSelection(item.mangaUrl),
                   );
                 },
                 childCount: currentItems.length,

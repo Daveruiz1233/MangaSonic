@@ -1,10 +1,12 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:palette_generator/palette_generator.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/migration_utils.dart';
+import 'package:manga_sonic/utils/palette_utils.dart';
+import 'package:manga_sonic/ui/widgets/source_tag.dart';
+import 'package:manga_sonic/ui/widgets/info_row.dart';
+import 'package:manga_sonic/ui/widgets/blurred_cover_background.dart';
 import 'package:manga_sonic/ui/screens/manga_screen.dart';
 
 class MigrationPreviewSheet extends StatefulWidget {
@@ -33,22 +35,11 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
   void initState() {
     super.initState();
     _fetchDetails();
-    _extractPalette();
+    PaletteUtils.extractDominantColor(widget.targetManga.coverUrl).then((color) {
+      if (mounted && color != null) setState(() => _dominantColor = color);
+    });
   }
 
-  Future<void> _extractPalette() async {
-    try {
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(
-        CachedNetworkImageProvider(widget.targetManga.coverUrl),
-        maximumColorCount: 20,
-      );
-      if (mounted) {
-        setState(() {
-          _dominantColor = paletteGenerator.dominantColor?.color;
-        });
-      }
-    } catch (_) {}
-  }
 
   Future<void> _fetchDetails() async {
     try {
@@ -70,14 +61,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
     }
   }
 
-  String _getSourceName(String id) {
-    switch (id) {
-      case 'asuracomic': return 'Asura Scans';
-      case 'manhuatop': return 'ManhuaTop';
-      case 'manhuaplus': return 'Manhua Plus';
-      default: return id.toUpperCase();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,34 +77,13 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
         children: [
           // Blurred background
           if (!_isLoading && _error == null)
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.4,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: CachedNetworkImage(
-                    imageUrl: widget.targetManga.coverUrl,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+            BlurredCoverBackground(
+              imageUrl: widget.targetManga.coverUrl,
+              dominantColor: _dominantColor,
+              blurSigma: 20,
+              topOpacity: 0.15,
+              bottomOpacity: 1.0,
             ),
-          
-          // Gradient overlay
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.4),
-                    Colors.black.withValues(alpha: 0.9),
-                  ],
-                ),
-              ),
-            ),
-          ),
 
           // Main Content
           Padding(
@@ -177,26 +139,15 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: accent.withValues(alpha: 0.4), width: 1),
-                              ),
-                              child: Text(
-                                _getSourceName(widget.targetManga.sourceId),
-                                style: TextStyle(
-                                  color: accent,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                            SourceTag(
+                              sourceId: widget.targetManga.sourceId,
+                              accentColor: accent,
+                              showIcon: false,
                             ),
                             const SizedBox(height: 12),
-                            _infoRow(Icons.person_outline, _details!.author),
-                            _infoRow(Icons.info_outline, _details!.status),
-                            _infoRow(Icons.list, '${_details!.chapters.length} Chapters'),
+                            InfoRow(icon: Icons.person_outline, text: _details!.author),
+                            InfoRow(icon: Icons.info_outline, text: _details!.status),
+                            InfoRow(icon: Icons.list, text: '${_details!.chapters.length} Chapters'),
                           ],
                         ),
                       ),
@@ -271,23 +222,4 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
     );
   }
 
-  Widget _infoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: Colors.white38),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

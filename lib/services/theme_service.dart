@@ -26,7 +26,12 @@ class ThemeService extends ChangeNotifier {
     ) as int;
 
     _primaryColor = Color(colorValue);
+    // Safety check: handle fully transparent color by resetting to default
+    if (_primaryColor.a == 0) _primaryColor = Colors.deepPurple;
+
     _backgroundColor = Color(bgColorValue);
+    // Safety check: handle fully transparent color by resetting to default
+    if (_backgroundColor.a == 0) _backgroundColor = const Color(0xFF121212);
     notifyListeners();
   }
 

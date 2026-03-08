@@ -1,7 +1,5 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:palette_generator/palette_generator.dart';
 import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
@@ -11,9 +9,15 @@ import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
+import 'package:manga_sonic/ui/widgets/source_tag.dart';
+import 'package:manga_sonic/ui/widgets/info_row.dart';
 import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
+import 'package:manga_sonic/utils/palette_utils.dart';
+import 'package:manga_sonic/utils/source_registry.dart';
 import 'package:manga_sonic/ui/widgets/migration_preview_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'package:manga_sonic/ui/widgets/blurred_cover_background.dart';
 
 class MangaScreen extends StatefulWidget {
   final String mangaTitle;
@@ -49,7 +53,15 @@ class _MangaScreenState extends State<MangaScreen> {
     _isSaved = LibraryDB.isSaved(widget.mangaUrl);
     _fetchData();
     _scrollController.addListener(_onScroll);
-    _extractPalette();
+    PaletteUtils.extractDominantColor(widget.coverUrl).then((color) {
+      if (mounted && color != null) setState(() => _dominantColor = color);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _onScroll() {
@@ -60,21 +72,6 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
-  Future<void> _extractPalette() async {
-    try {
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(
-        CachedNetworkImageProvider(widget.coverUrl),
-        maximumColorCount: 20,
-      );
-      if (mounted) {
-        setState(() {
-          _dominantColor = paletteGenerator.dominantColor?.color;
-        });
-      }
-    } catch (_) {
-      // Fallback to default
-    }
-  }
 
   Future<void> _fetchData() async {
     setState(() {
@@ -143,18 +140,6 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
-  String _getSourceName(String id) {
-    switch (id) {
-      case 'asuracomic':
-        return 'Asura Scans';
-      case 'manhuatop':
-        return 'ManhuaTop';
-      case 'manhuaplus':
-        return 'Manhua Plus';
-      default:
-        return id.toUpperCase();
-    }
-  }
 
   int _findContinueChapterIndex() {
     final chapters = _details?.chapters ?? [];
@@ -227,28 +212,9 @@ class _MangaScreenState extends State<MangaScreen> {
       body: Stack(
         children: [
           // Blurred background
-          Positioned.fill(
-            child: CachedNetworkImage(
-              imageUrl: widget.coverUrl,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      (_dominantColor ?? Colors.black).withValues(alpha: 0.4),
-                      Colors.black.withValues(alpha: 0.9),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          BlurredCoverBackground(
+            imageUrl: widget.coverUrl,
+            dominantColor: _dominantColor,
           ),
 
           // Main content
@@ -292,53 +258,23 @@ class _MangaScreenState extends State<MangaScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: (_dominantColor ??
-                                            Colors.deepPurpleAccent)
-                                        .withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: (_dominantColor ??
-                                              Colors.deepPurpleAccent)
-                                          .withValues(alpha: 0.5),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.source_outlined,
-                                        size: 12,
-                                        color: Colors.white70,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _getSourceName(widget.sourceId),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                SourceTag(
+                                  sourceId: widget.sourceId,
+                                  accentColor: _dominantColor ?? Colors.deepPurpleAccent,
                                 ),
                                 const SizedBox(height: 12),
-                                _infoRow(
-                                  Icons.person_outline,
-                                  _details!.author,
+                                InfoRow(
+                                  icon: Icons.person_outline,
+                                  text: _details!.author,
                                 ),
-                                _infoRow(
-                                  Icons.brush_outlined,
-                                  _details!.artist,
+                                InfoRow(
+                                  icon: Icons.brush_outlined,
+                                  text: _details!.artist,
                                 ),
-                                _infoRow(Icons.info_outline, _details!.status),
+                                InfoRow(
+                                  icon: Icons.info_outline,
+                                  text: _details!.status,
+                                ),
                                 const SizedBox(height: 12),
                                 // Genre Tags
                                 Wrap(
@@ -616,25 +552,6 @@ class _MangaScreenState extends State<MangaScreen> {
     );
   }
 
-  Widget _infoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.white54),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _genreTag(String genre) {
     return Container(
@@ -894,7 +811,7 @@ class _MangaScreenState extends State<MangaScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    _getSourceName(manga.sourceId),
+                                    SourceRegistry.getDisplayName(manga.sourceId),
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 9,
