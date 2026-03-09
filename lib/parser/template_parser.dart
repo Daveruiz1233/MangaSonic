@@ -137,22 +137,48 @@ class TemplateParser extends BaseParser {
 
     // Strategy 2: Look for common CSS classes if Strategy 1 found nothing
     if (list.isEmpty) {
-      final items = document.querySelectorAll('.item, .manga, .book-item, .entry, .bsx');
+      final items = document.querySelectorAll(
+          '.item, .manga, .book-item, .entry, .bsx, .list-item, article, [class*="grid-item"]');
       for (var item in items) {
         final aTag = item.querySelector('a');
         final imgTag = item.querySelector('img');
         if (aTag == null || imgTag == null) continue;
-        
+
         final url = _resolveUrl(aTag.attributes['href'] ?? '');
         if (seen.contains(url)) continue;
-        
-        final title = (aTag.attributes['title'] ?? imgTag.attributes['alt'] ?? aTag.text.trim()).trim();
+
+        final title = (aTag.attributes['title'] ??
+                imgTag.attributes['alt'] ??
+                aTag.text.trim())
+            .trim();
         final cover = _imageAttr(imgTag);
-        
-        if (title.isNotEmpty && cover.isNotEmpty) {
-           list.add(Manga(title: title, url: url, coverUrl: cover, sourceId: source.sourceId));
-           seen.add(url);
+
+        if (title.isNotEmpty && cover.isNotEmpty && title.length > 2) {
+          list.add(Manga(
+              title: title, url: url, coverUrl: cover, sourceId: source.sourceId));
+          seen.add(url);
         }
+      }
+    }
+
+    // Strategy 3: Hyper-Generic fallback - Just find any <a> with a clear <img> and reasonable title
+    if (list.isEmpty) {
+      final allLinks = document.querySelectorAll('a');
+      for (var a in allLinks) {
+        final img = a.querySelector('img');
+        if (img == null) continue;
+        final href = a.attributes['href'] ?? '';
+        final title = (a.attributes['title'] ?? img.attributes['alt'] ?? '').trim();
+        
+        if (title.length > 3 && href.length > 5 && !seen.contains(_resolveUrl(href))) {
+           final url = _resolveUrl(href);
+           final cover = _imageAttr(img);
+           if (cover.isNotEmpty) {
+             list.add(Manga(title: title, url: url, coverUrl: cover, sourceId: source.sourceId));
+             seen.add(url);
+           }
+        }
+        if (list.length > 20) break; // Don't over-harvest junk
       }
     }
 

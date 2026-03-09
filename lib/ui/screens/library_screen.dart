@@ -290,6 +290,7 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
                 lastChapter: recentlyRead.chapter,
                 lastPage: recentlyRead.lastPage,
                 description: recentlyRead.description,
+                genres: recentlyRead.genres,
                 onTap: () {
                   final manga = recentlyRead.manga;
                   Navigator.push(

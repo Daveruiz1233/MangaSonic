@@ -12,6 +12,7 @@ import 'package:manga_sonic/services/nim_ai_service.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 import 'package:manga_sonic/utils/library_update_service.dart';
 import 'package:manga_sonic/utils/source_registry.dart';
+import 'package:manga_sonic/utils/memory_safety_manager.dart';
 import 'ui/screens/home_screen.dart';
 
 void main() async {
@@ -26,6 +27,8 @@ void main() async {
   await NimAiService.init();
   await LibraryUpdateService.init();
   SourceRegistry.refresh();
+
+  MemorySafetyManager().init();
 
   final themeService = ThemeService();
   final downloadManager = DownloadManager();

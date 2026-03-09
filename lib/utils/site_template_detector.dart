@@ -137,6 +137,36 @@ class SiteTemplateDetector {
       );
     }
 
+    // --- URL-based Fallback (Low confidence) ---
+    final host = Uri.parse(normalizedUrl).host.toLowerCase();
+    if (host.contains('asura') || host.contains('reaper') || host.contains('flame') || host.contains('realm')) {
+      return DetectionResult(
+        templateType: TemplateType.rsc,
+        confidence: 0.7,
+        extractedSelectors: _rscSelectors(normalizedUrl),
+        sampleManga: [],
+        rawHtml: rawHtml,
+      );
+    }
+    if (host.contains('tx') || host.contains('top') || host.contains('kiss') || host.contains('scan')) {
+      return DetectionResult(
+        templateType: TemplateType.madara,
+        confidence: 0.5,
+        extractedSelectors: _madaraSelectors(normalizedUrl),
+        sampleManga: [],
+        rawHtml: rawHtml,
+      );
+    }
+    if (host.contains('kakalot') || host.contains('nato') || host.contains('nelo')) {
+      return DetectionResult(
+         templateType: TemplateType.generic, // Will use heuristics but URL hints help confidence
+         confidence: 0.8,
+         extractedSelectors: _madaraSelectors(normalizedUrl), // They often mimic Madara structure
+         sampleManga: [],
+         rawHtml: rawHtml,
+      );
+    }
+
     // --- Fallback: Unknown → AI needed ---
     return DetectionResult(
       templateType: TemplateType.generic,
@@ -177,7 +207,9 @@ class SiteTemplateDetector {
         html.contains('_buildManifest') ||
         html.contains('react') && html.contains('hydrat') ||
         html.contains('reaper-') ||
-        html.contains('series-list');
+        html.contains('flame-') ||
+        html.contains('series-list') ||
+        html.contains('grid-cols-');
   }
 
   // ── Preset selector bundles ───────────────────────────────

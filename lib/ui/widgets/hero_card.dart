@@ -10,6 +10,7 @@ class HeroCard extends StatefulWidget {
   final Chapter? lastChapter;
   final int? lastPage;
   final String description;
+  final List<String> genres;
   final VoidCallback onTap;
   final VoidCallback? onContinue;
   final HeroCardMode mode;
@@ -33,6 +34,7 @@ class HeroCard extends StatefulWidget {
     this.lastChapter,
     this.lastPage,
     required this.description,
+    this.genres = const [],
     required this.onTap,
     this.onContinue,
     this.mode = HeroCardMode.reading,
@@ -194,7 +196,21 @@ class _HeroCardState extends State<HeroCard> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                                if (isReading && widget.genres.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      widget.genres.join(' • '),
+                                      style: TextStyle(
+                                        color: accent.withValues(alpha: 0.6),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
                               // Bottom Row (Actions)
                               _buildActionArea(accent, theme),
                             ],

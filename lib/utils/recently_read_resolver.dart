@@ -8,12 +8,14 @@ class RecentlyReadResult {
   final Chapter chapter;
   final int lastPage;
   final String description;
+  final List<String> genres;
 
   RecentlyReadResult({
     required this.manga,
     required this.chapter,
     required this.lastPage,
     required this.description,
+    required this.genres,
   });
 }
 
@@ -103,6 +105,7 @@ class RecentlyReadResolver {
       chapter: chapter,
       lastPage: bestStatus.lastPage,
       description: details?.description ?? '',
+      genres: details?.genres ?? [],
     );
   }
 }

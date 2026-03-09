@@ -6,6 +6,7 @@ import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
+import 'package:manga_sonic/utils/memory_safety_manager.dart';
 
 class ChapterReaderScreen extends StatefulWidget {
   final List<Chapter> allChapters;
@@ -43,6 +44,12 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   int _topChapterIndex = 0;
   int _bottomChapterIndex = 0;
 
+  int _activeStartIndex = -1;
+  int _activeEndIndex = -1;
+
+  StreamSubscription? _memoryPressureSub;
+  bool _emergencyMode = false;
+
   // Progress tracking — uses ValueNotifier so updates DON'T rebuild the
   // CustomScrollView. Only the overlay widgets listening to these rebuild.
   final ValueNotifier<String> _chapterTitleNotifier = ValueNotifier('');
@@ -60,13 +67,74 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     _chapterTitleNotifier.value = widget.allChapters[widget.initialIndex].title;
 
     _scrollController = ScrollController();
-    _scrollController.addListener(_onScroll);
+    _scrollController.addListener(_onCombinedListener);
 
     _fetchInitialChapter();
+    _listenToMemoryPressure();
+  }
+
+  void _listenToMemoryPressure() {
+    _memoryPressureSub = MemorySafetyManager().lowMemoryStream.listen((isLow) {
+      if (mounted) {
+        setState(() {
+          _emergencyMode = isLow;
+        });
+        _updateVisibilityWindow();
+      }
+    });
+  }
+
+  void _onCombinedListener() {
+    _onScroll();
+    _updateVisibilityWindow();
+  }
+
+  void _updateVisibilityWindow() {
+    if (!_scrollController.hasClients) return;
+    
+    final allPages = [..._backwardPages.reversed, ..._forwardPages];
+    if (allPages.isEmpty) return;
+
+    final viewportHeight = _scrollController.position.viewportDimension;
+    final scrollOffset = _scrollController.offset;
+
+    // Use the existing render box tracking to find the "current" index 
+    // and mark surrounding pages as 'near'.
+    
+    int centerIndex = -1;
+    double closestToCenter = double.infinity;
+
+    for (int i = 0; i < allPages.length; i++) {
+        final page = allPages[i];
+        if (page.isSeparator) continue;
+        final ctx = page.key.currentContext;
+        if (ctx == null) continue;
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box == null || !box.hasSize) continue;
+        
+        final pos = box.localToGlobal(Offset.zero);
+        final centerDelta = (pos.dy - (viewportHeight / 2)).abs();
+        
+        if (centerDelta < closestToCenter) {
+            closestToCenter = centerDelta;
+            centerIndex = i;
+        }
+    }
+
+    if (centerIndex != -1) {
+        final backwardCount = _emergencyMode ? 2 : 5;
+        final forwardCount = _emergencyMode ? 5 : 10;
+        
+        setState(() {
+            _activeStartIndex = (centerIndex - backwardCount).clamp(0, allPages.length - 1);
+            _activeEndIndex = (centerIndex + forwardCount).clamp(0, allPages.length - 1);
+        });
+    }
   }
 
   @override
   void dispose() {
+    _memoryPressureSub?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _chapterTitleNotifier.dispose();
@@ -249,6 +317,30 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     }
 
     _prefetchAdjacentChapters();
+    _startHeadlessResolution(pages);
+  }
+
+  void _startHeadlessResolution(List<ReaderPage> pages) {
+    for (final page in pages) {
+      if (page.aspectRatio != null || page.isSeparator) continue;
+      
+      final provider = page.file != null 
+          ? FileImage(page.file!) 
+          : CachedNetworkImageProvider(page.url!) as ImageProvider;
+
+      final stream = provider.resolve(const ImageConfiguration());
+      late ImageStreamListener listener;
+      listener = ImageStreamListener((info, _) {
+        if (mounted) {
+          final aspect = info.image.width / info.image.height;
+          setState(() {
+            page.aspectRatio = aspect;
+          });
+        }
+        stream.removeListener(listener);
+      });
+      stream.addListener(listener);
+    }
   }
 
   Future<List<ReaderPage>?> _fetchChapterPages(Chapter chapter) async {
@@ -349,6 +441,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           _forwardPages.addAll(pages);
           _isFetchingNext = false;
         });
+        _startHeadlessResolution(pages);
       } else if (mounted) {
         _isFetchingNext = false;
       }
@@ -380,6 +473,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           _backwardPages.add(separator);
           _isFetchingPrev = false;
         });
+        _startHeadlessResolution(pages);
       } else if (mounted) {
         _isFetchingPrev = false;
       }
@@ -424,10 +518,15 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             if (index >= _backwardPages.length) return null;
-                            return _buildPageWidget(_backwardPages[index]);
+                            final page = _backwardPages[index];
+                            return _MemoryManagedPage(
+                              key: page.key,
+                              page: page,
+                              isNear: _isPageNearViewport(page),
+                            );
                           },
                           childCount: _backwardPages.length,
-                          addAutomaticKeepAlives: true,
+                          addAutomaticKeepAlives: false,
                           findChildIndexCallback: (Key key) {
                             final idx = _backwardPages.indexWhere(
                               (p) => p.key == key,
@@ -441,10 +540,15 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             if (index >= _forwardPages.length) return null;
-                            return _buildPageWidget(_forwardPages[index]);
+                            final page = _forwardPages[index];
+                            return _MemoryManagedPage(
+                              key: page.key,
+                              page: page,
+                              isNear: _isPageNearViewport(page),
+                            );
                           },
                           childCount: _forwardPages.length,
-                          addAutomaticKeepAlives: true,
+                          addAutomaticKeepAlives: false,
                           findChildIndexCallback: (Key key) {
                             final idx = _forwardPages.indexWhere(
                               (p) => p.key == key,
@@ -532,7 +636,27 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     );
   }
 
-  Widget _buildPageWidget(ReaderPage page) {
+  bool _isPageNearViewport(ReaderPage page) {
+    if (_activeStartIndex == -1) return true;
+    final allPages = [..._backwardPages.reversed, ..._forwardPages];
+    final idx = allPages.indexOf(page);
+    if (idx == -1) return true;
+    return idx >= _activeStartIndex && idx <= _activeEndIndex;
+  }
+}
+
+class _MemoryManagedPage extends StatelessWidget {
+  final ReaderPage page;
+  final bool isNear;
+
+  const _MemoryManagedPage({
+    super.key,
+    required this.page,
+    required this.isNear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     if (page.isSeparator) {
       return Container(
         height: 80,
@@ -551,53 +675,46 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     }
 
     return RepaintBoundary(
-      key: page.key,
-      child: _StableImage(
+      child: _StableImageV3(
         key: ValueKey(page.url ?? page.file?.path ?? page.chapterUrl),
         page: page,
+        isNear: isNear,
       ),
     );
   }
 }
 
-/// Prevents viewport shifts by locking height once the image's aspect ratio
-/// is known. While loading, shows a fixed 600px placeholder. When the image
-/// decodes, captures its real dimensions and constrains the SizedBox to the
-/// exact height — the transition happens in ONE frame with no intermediate
-/// relayout that could push other items around.
-class _StableImage extends StatefulWidget {
+/// V3 Engine: Instant zero-jump placeholders + scroll compensation.
+class _StableImageV3 extends StatefulWidget {
   final ReaderPage page;
-  const _StableImage({super.key, required this.page});
+  final bool isNear;
+  const _StableImageV3({super.key, required this.page, required this.isNear});
 
   @override
-  State<_StableImage> createState() => _StableImageState();
+  State<_StableImageV3> createState() => _StableImageV3State();
 }
 
-class _StableImageState extends State<_StableImage> with AutomaticKeepAliveClientMixin {
-  double? _aspectRatio;
-
-  @override
-  bool get wantKeepAlive => _aspectRatio != null;
-
+class _StableImageV3State extends State<_StableImageV3> {
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        final aspect = widget.page.aspectRatio;
 
-        if (_aspectRatio != null) {
-          final height = width / _aspectRatio!;
+        if (aspect != null) {
+          final height = width / aspect;
           return SizedBox(
             width: width,
             height: height,
-            child: _buildImage(),
+            child: widget.isNear ? _buildImage() : const SizedBox.shrink(),
           );
         }
 
+        // Fallback placeholder while pre-resolving (V3 goal: should be rare)
         return SizedBox(
           width: width,
-          height: 600,
+          height: 800, // Better guess for portrait manga
           child: _buildImageWithSizeDetection(width),
         );
       },
@@ -605,96 +722,80 @@ class _StableImageState extends State<_StableImage> with AutomaticKeepAliveClien
   }
 
   Widget _buildImage() {
+    // Use manual Image widget with providers to cap cache size
+    final ImageProvider provider;
     if (widget.page.file != null) {
-      return Image.file(
-        widget.page.file!,
-        fit: BoxFit.contain,
-        width: double.infinity,
-        cacheWidth: 1200,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => _errorWidget(),
-      );
+      provider = FileImage(widget.page.file!);
+    } else {
+      provider = CachedNetworkImageProvider(widget.page.url!);
     }
-    return CachedNetworkImage(
-      imageUrl: widget.page.url!,
+
+    return Image(
+      image: provider,
       fit: BoxFit.contain,
-      width: double.infinity,
-      memCacheWidth: 1200,
-      fadeInDuration: Duration.zero,
-      placeholderFadeInDuration: Duration.zero,
-      placeholder: (_, _) => const SizedBox.shrink(),
-      errorWidget: (_, _, _) => _errorWidget(),
+      gaplessPlayback: true,
+      // Cap decoding size to save RAM on iPhone 6s Plus
+      // 800-1000px is plenty for a phone screen
+      filterQuality: FilterQuality.medium,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        return frame != null ? child : _loadingWidget();
+      },
+      errorBuilder: (_, __, ___) => _errorWidget(),
     );
   }
 
   Widget _buildImageWithSizeDetection(double availableWidth) {
+    final ImageProvider provider;
     if (widget.page.file != null) {
-      return Image.file(
-        widget.page.file!,
-        fit: BoxFit.contain,
-        width: double.infinity,
-        cacheWidth: 1200,
-        gaplessPlayback: true,
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (frame != null) {
-            _resolveSize(FileImage(widget.page.file!), availableWidth, context);
-          }
-          return frame != null ? child : _loadingWidget();
-        },
-        errorBuilder: (_, _, _) => _errorWidget(),
-      );
+      provider = FileImage(widget.page.file!);
+    } else {
+      provider = CachedNetworkImageProvider(widget.page.url!);
     }
 
-    return CachedNetworkImage(
-      imageUrl: widget.page.url!,
+    return Image(
+      image: provider,
       fit: BoxFit.contain,
-      width: double.infinity,
-      memCacheWidth: 1200,
-      fadeInDuration: Duration.zero,
-      placeholderFadeInDuration: Duration.zero,
-      imageBuilder: (context, imageProvider) {
-        _resolveSize(imageProvider, availableWidth, context);
-        return Image(
-          image: imageProvider,
-          fit: BoxFit.contain,
-          width: double.infinity,
-        );
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (frame != null && widget.page.aspectRatio == null) {
+          _resolveSize(provider, availableWidth, context);
+        }
+        return frame != null ? child : _loadingWidget();
       },
-      placeholder: (_, _) => _loadingWidget(),
-      errorWidget: (_, _, _) => _errorWidget(),
+      errorBuilder: (_, __, ___) => _errorWidget(),
     );
   }
 
   void _resolveSize(ImageProvider provider, double availableWidth, BuildContext context) {
-    if (_aspectRatio != null) return;
+    if (widget.page.aspectRatio != null) return;
     final stream = provider.resolve(const ImageConfiguration());
     late ImageStreamListener listener;
     
-    // Grab scroll position if it exists
     final scrollPosition = Scrollable.maybeOf(context)?.position;
 
     listener = ImageStreamListener((info, _) {
-      final w = info.image.width.toDouble();
-      final h = info.image.height.toDouble();
-      if (w > 0 && h > 0 && mounted) {
-        final newAspect = w / h;
-        final heightDelta = (availableWidth / newAspect) - 600.0;
+      if (mounted) {
+        final aspect = info.image.width / info.image.height;
+        final heightDelta = (availableWidth / aspect) - 800.0;
 
-        setState(() => _aspectRatio = newAspect);
-
-        // Compensate scroll if we are above viewport center
-        if (scrollPosition != null && heightDelta.abs() > 1.0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            final box = context.findRenderObject() as RenderBox?;
-            if (box != null && box.hasSize) {
-              final pos = box.localToGlobal(Offset.zero);
-              // If image is above viewport, adjust scroll
-              if (pos.dy < 0) {
-                scrollPosition.correctBy(heightDelta);
-              }
-            }
+        if (widget.page.aspectRatio == null) {
+          setState(() {
+            widget.page.aspectRatio = aspect;
           });
+
+          // Accurate scroll compensation
+          if (scrollPosition != null && heightDelta.abs() > 1.0) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final box = context.findRenderObject() as RenderBox?;
+              if (box != null && box.hasSize) {
+                final pos = box.localToGlobal(Offset.zero);
+                // IF top of image is ABOVE viewport center, compensate
+                if (pos.dy < 0) {
+                  scrollPosition.correctBy(heightDelta);
+                }
+              }
+            });
+          }
         }
       }
       stream.removeListener(listener);
@@ -735,6 +836,8 @@ class ReaderPage {
   final File? file;
   final bool isSeparator;
   final GlobalKey key = GlobalKey();
+  
+  double? aspectRatio;
 
   ReaderPage({
     required this.chapterUrl,

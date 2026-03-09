@@ -74,13 +74,28 @@ class _MangaScreenState extends State<MangaScreen> {
 
 
   Future<void> _fetchData() async {
-    setState(() {
-      _isLoading = true;
-      _isOffline = false;
-    });
-
     final cachedDetails = MangaCacheDB.getDetails(widget.mangaUrl);
 
+    if (cachedDetails != null) {
+      if (mounted) {
+        setState(() {
+          _details = cachedDetails;
+          _isLoading = false;
+        });
+      }
+      // If we have cache, perform network sync silently in background
+      _syncOnline();
+    } else {
+      // No cache, must wait for network
+      setState(() {
+        _isLoading = true;
+        _isOffline = false;
+      });
+      await _syncOnline();
+    }
+  }
+
+  Future<void> _syncOnline() async {
     try {
       final parser = getParserForSite(widget.sourceId);
       final manga = Manga(
@@ -102,40 +117,31 @@ class _MangaScreenState extends State<MangaScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Fetch error: $e');
-
-      // If fetch fails, try to use cache
-      if (cachedDetails != null) {
-        if (mounted) {
-          setState(() {
-            _details = cachedDetails;
-            _isLoading = false;
-            _isOffline = true;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Working offline. Showing cached details.'),
-            ),
-          );
-        }
-        return;
-      }
+      debugPrint('Sync error: $e');
 
       if (e.toString().contains('403') || e.toString().contains('Cloudflare')) {
-        if (mounted) {
+        if (mounted && _details == null) {
+          // Only show "Passing Cloudflare" message if we don't have ANY details yet
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Passing Cloudflare... Please wait.')),
           );
         }
         await CloudflareInterceptor.bypass(widget.mangaUrl);
-        return _fetchData();
+        return _syncOnline();
       }
 
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() {
+          _isLoading = false;
+          if (_details != null) _isOffline = true;
+        });
+        
+        // Only show error snackbar if we had no cache to show at all
+        if (_details == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Network error: $e')),
+          );
+        }
       }
     }
   }
