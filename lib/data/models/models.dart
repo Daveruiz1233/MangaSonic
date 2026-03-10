@@ -93,6 +93,8 @@ class ChapterStatus {
 }
 
 class MangaDetails {
+  final String title;
+  final String coverUrl;
   final String description;
   final String author;
   final String artist;
@@ -102,6 +104,8 @@ class MangaDetails {
   final List<Manga> suggestions;
 
   MangaDetails({
+    required this.title,
+    required this.coverUrl,
     required this.description,
     required this.author,
     required this.artist,
@@ -112,6 +116,8 @@ class MangaDetails {
   });
 
   Map<String, dynamic> toMap() => {
+    'title': title,
+    'coverUrl': coverUrl,
     'description': description,
     'author': author,
     'artist': artist,
@@ -123,7 +129,9 @@ class MangaDetails {
 
   factory MangaDetails.fromMap(Map<dynamic, dynamic> map) {
     return MangaDetails(
-      description: map['description'],
+      title: map['title'] ?? '',
+      coverUrl: map['coverUrl'] ?? '',
+      description: map['description'] ?? '',
       author: map['author'],
       artist: map['artist'],
       status: map['status'],

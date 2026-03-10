@@ -40,7 +40,13 @@ class LibraryUpdateService extends ChangeNotifier {
         }
 
         try {
-          final freshDetails = await parser.getMangaDetails(item.mangaUrl);
+          final manga = Manga(
+            title: item.title,
+            url: item.mangaUrl,
+            coverUrl: item.coverUrl,
+            sourceId: item.sourceId,
+          );
+          final freshDetails = await parser.fetchMangaDetails(manga);
           final cachedDetails = MangaCacheDB.getDetails(item.mangaUrl);
 
           if (cachedDetails != null) {

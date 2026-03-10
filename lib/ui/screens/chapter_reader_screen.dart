@@ -44,19 +44,19 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   int _topChapterIndex = 0;
   int _bottomChapterIndex = 0;
 
-  int _activeStartIndex = -1;
-  int _activeEndIndex = -1;
-
   StreamSubscription? _memoryPressureSub;
   bool _emergencyMode = false;
 
-  // Progress tracking — uses ValueNotifier so updates DON'T rebuild the
-  // CustomScrollView. Only the overlay widgets listening to these rebuild.
   final ValueNotifier<String> _chapterTitleNotifier = ValueNotifier('');
   final ValueNotifier<String> _pageInfoNotifier = ValueNotifier('');
   final ValueNotifier<bool> _showUINotifier = ValueNotifier(true);
+  
+  // Visibility window tracking — avoids full-screen rebuilds
+  final ValueNotifier<({int start, int end})> _visibilityWindowNotifier = 
+      ValueNotifier((start: -1, end: -1));
 
   DateTime _lastSaveTime = DateTime.now();
+  DateTime _lastVisibilityUpdate = DateTime.now();
   final Set<String> _loadedChapterUrls = {};
 
   @override
@@ -71,6 +71,8 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
 
     _fetchInitialChapter();
     _listenToMemoryPressure();
+    // Register reader visibility to avoid aggressive global eviction
+    MemorySafetyManager().registerReaderVisible();
   }
 
   void _listenToMemoryPressure() {
@@ -92,14 +94,16 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   void _updateVisibilityWindow() {
     if (!_scrollController.hasClients) return;
     
+    final now = DateTime.now();
+    if (now.difference(_lastVisibilityUpdate) < const Duration(milliseconds: 100)) {
+        return;
+    }
+    _lastVisibilityUpdate = now;
+
     final allPages = [..._backwardPages.reversed, ..._forwardPages];
     if (allPages.isEmpty) return;
 
     final viewportHeight = _scrollController.position.viewportDimension;
-    final scrollOffset = _scrollController.offset;
-
-    // Use the existing render box tracking to find the "current" index 
-    // and mark surrounding pages as 'near'.
     
     int centerIndex = -1;
     double closestToCenter = double.infinity;
@@ -125,21 +129,27 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
         final backwardCount = _emergencyMode ? 2 : 5;
         final forwardCount = _emergencyMode ? 5 : 10;
         
-        setState(() {
-            _activeStartIndex = (centerIndex - backwardCount).clamp(0, allPages.length - 1);
-            _activeEndIndex = (centerIndex + forwardCount).clamp(0, allPages.length - 1);
-        });
+        final newStart = (centerIndex - backwardCount).clamp(0, allPages.length - 1);
+        final newEnd = (centerIndex + forwardCount).clamp(0, allPages.length - 1);
+        
+        if (_visibilityWindowNotifier.value.start != newStart || 
+            _visibilityWindowNotifier.value.end != newEnd) {
+            _visibilityWindowNotifier.value = (start: newStart, end: newEnd);
+        }
     }
   }
 
   @override
   void dispose() {
+    // Unregister before clearing listeners so manager can perform deferred eviction
+    MemorySafetyManager().unregisterReaderVisible();
     _memoryPressureSub?.cancel();
-    _scrollController.removeListener(_onScroll);
+    _scrollController.removeListener(_onCombinedListener);
     _scrollController.dispose();
     _chapterTitleNotifier.dispose();
     _pageInfoNotifier.dispose();
     _showUINotifier.dispose();
+    _visibilityWindowNotifier.dispose();
     super.dispose();
   }
 
@@ -511,22 +521,36 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                   child: CustomScrollView(
                     controller: _scrollController,
                     center: _centerKey,
-                    cacheExtent: 6000,
-                    physics: const ClampingScrollPhysics(),
+                    cacheExtent: 2500,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     slivers: [
                       SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             if (index >= _backwardPages.length) return null;
                             final page = _backwardPages[index];
-                            return _MemoryManagedPage(
-                              key: page.key,
-                              page: page,
-                              isNear: _isPageNearViewport(page),
+                            return ValueListenableBuilder(
+                              valueListenable: _visibilityWindowNotifier,
+                              builder: (context, window, _) {
+                                // In the backward list, index 0 is first page (near middle), 
+                                // index N is very top of chapter (far from middle).
+                                // Total list order: [backward(N..0), forward(0..M)]
+                                final globalIdx = (_backwardPages.length - 1 - index);
+                                final isNear = globalIdx >= window.start && 
+                                               globalIdx <= window.end;
+                                
+                                return _MemoryManagedPage(
+                                  key: page.key,
+                                  page: page,
+                                  isNear: isNear,
+                                );
+                              },
                             );
                           },
                           childCount: _backwardPages.length,
-                          addAutomaticKeepAlives: false,
+                          addAutomaticKeepAlives: true,
                           findChildIndexCallback: (Key key) {
                             final idx = _backwardPages.indexWhere(
                               (p) => p.key == key,
@@ -541,14 +565,23 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                           (context, index) {
                             if (index >= _forwardPages.length) return null;
                             final page = _forwardPages[index];
-                            return _MemoryManagedPage(
-                              key: page.key,
-                              page: page,
-                              isNear: _isPageNearViewport(page),
+                            return ValueListenableBuilder(
+                              valueListenable: _visibilityWindowNotifier,
+                              builder: (context, window, _) {
+                                final globalIdx = _backwardPages.length + index;
+                                final isNear = globalIdx >= window.start && 
+                                               globalIdx <= window.end;
+                                               
+                                return _MemoryManagedPage(
+                                  key: page.key,
+                                  page: page,
+                                  isNear: isNear,
+                                );
+                              },
                             );
                           },
                           childCount: _forwardPages.length,
-                          addAutomaticKeepAlives: false,
+                          addAutomaticKeepAlives: true,
                           findChildIndexCallback: (Key key) {
                             final idx = _forwardPages.indexWhere(
                               (p) => p.key == key,
@@ -636,13 +669,6 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
     );
   }
 
-  bool _isPageNearViewport(ReaderPage page) {
-    if (_activeStartIndex == -1) return true;
-    final allPages = [..._backwardPages.reversed, ..._forwardPages];
-    final idx = allPages.indexOf(page);
-    if (idx == -1) return true;
-    return idx >= _activeStartIndex && idx <= _activeEndIndex;
-  }
 }
 
 class _MemoryManagedPage extends StatelessWidget {
@@ -694,9 +720,23 @@ class _StableImageV3 extends StatefulWidget {
   State<_StableImageV3> createState() => _StableImageV3State();
 }
 
-class _StableImageV3State extends State<_StableImageV3> {
+class _StableImageV3State extends State<_StableImageV3>
+    with AutomaticKeepAliveClientMixin<_StableImageV3> {
+  @override
+  void initState() {
+    super.initState();
+    updateKeepAlive();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StableImageV3 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    updateKeepAlive();
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -720,6 +760,9 @@ class _StableImageV3State extends State<_StableImageV3> {
       },
     );
   }
+
+  @override
+  bool get wantKeepAlive => widget.isNear;
 
   Widget _buildImage() {
     // Use manual Image widget with providers to cap cache size

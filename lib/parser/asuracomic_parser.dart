@@ -259,6 +259,8 @@ class AsuraComicParser extends BaseParser {
     }
 
     return MangaDetails(
+      title: manga.title,
+      coverUrl: manga.coverUrl,
       description: description,
       author: author,
       artist: artist,

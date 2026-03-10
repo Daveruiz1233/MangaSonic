@@ -117,6 +117,8 @@ class ManhuaPlusParser extends BaseParser {
     final chapters = await fetchChapters(manga.url);
 
     return MangaDetails(
+      title: manga.title,
+      coverUrl: manga.coverUrl,
       description: description,
       author: author,
       artist: 'Unknown',

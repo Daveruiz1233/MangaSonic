@@ -82,6 +82,8 @@ class ManhuaTopParser extends BaseParser {
   Future<MangaDetails> fetchMangaDetails(Manga manga) async {
     final chapters = await fetchChapters(manga.url);
     return MangaDetails(
+      title: manga.title,
+      coverUrl: manga.coverUrl,
       description: 'Description not supported yet for this source.',
       author: 'Unknown',
       artist: 'Unknown',

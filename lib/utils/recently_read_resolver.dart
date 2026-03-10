@@ -77,9 +77,9 @@ class RecentlyReadResolver {
 
     if (mangaUrl == null && matchedItem == null) return null;
 
-    final title = matchedItem?.title ?? (matchedDetails != null ? matchedDetails.description.split('\n')[0] : 'Manga');
-    final cover = matchedItem?.coverUrl ?? '';
-    final source = matchedItem?.sourceId ?? 'unknown';
+    final title = matchedItem?.title ?? matchedDetails?.title ?? 'Manga';
+    final cover = matchedItem?.coverUrl ?? matchedDetails?.coverUrl ?? '';
+    final source = matchedItem?.sourceId ?? (matchedDetails != null ? 'unknown' : 'unknown'); 
 
     final details = matchedDetails ?? MangaCacheDB.getDetails(mangaUrl!);
     final chapter = details?.chapters.firstWhere(
