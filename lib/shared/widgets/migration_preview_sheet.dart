@@ -4,10 +4,10 @@ import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/migration_utils.dart';
 import 'package:manga_sonic/utils/palette_utils.dart';
-import 'package:manga_sonic/ui/widgets/source_tag.dart';
-import 'package:manga_sonic/ui/widgets/info_row.dart';
-import 'package:manga_sonic/ui/widgets/blurred_cover_background.dart';
-import 'package:manga_sonic/ui/screens/manga_screen.dart';
+import 'package:manga_sonic/shared/widgets/source_tag.dart';
+import 'package:manga_sonic/shared/widgets/info_row.dart';
+import 'package:manga_sonic/shared/widgets/blurred_cover_background.dart';
+import 'package:manga_sonic/features/library/manga_screen.dart';
 
 class MigrationPreviewSheet extends StatefulWidget {
   final Manga targetManga;
@@ -40,7 +40,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
     });
   }
 
-
   Future<void> _fetchDetails() async {
     try {
       final parser = getParserForSite(widget.targetManga.sourceId);
@@ -61,7 +60,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final accent = _dominantColor ?? Colors.deepPurpleAccent;
@@ -75,7 +73,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
       ),
       child: Stack(
         children: [
-          // Blurred background
           if (!_isLoading && _error == null)
             BlurredCoverBackground(
               imageUrl: widget.targetManga.coverUrl,
@@ -84,14 +81,11 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
               topOpacity: 0.15,
               bottomOpacity: 1.0,
             ),
-
-          // Main Content
           Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Drag handle
                 Container(
                   width: 40,
                   height: 4,
@@ -101,16 +95,21 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-
                 if (_isLoading)
-                  const Center(child: Padding(
-                    padding: EdgeInsets.all(40.0),
-                    child: CircularProgressIndicator(),
-                  ))
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
                 else if (_error != null)
-                  Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.redAccent)))
+                  Center(
+                    child: Text(
+                      'Error: $_error',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  )
                 else ...[
-                  // Header Info
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -154,7 +153,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Truncated Description
                   Text(
                     _details!.description,
                     maxLines: 3,
@@ -162,7 +160,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                     style: const TextStyle(color: Colors.white60, fontSize: 13),
                   ),
                   const SizedBox(height: 32),
-                  // Migration Button
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -175,7 +172,6 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                         shadowColor: accent.withValues(alpha: 0.5),
                       ),
                       onPressed: () async {
-                        // Show loading
                         showDialog(
                           context: context,
                           barrierDismissible: false,
@@ -190,10 +186,8 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
                         );
 
                         if (context.mounted) {
-                          Navigator.pop(context); // Pop loading
-                          Navigator.pop(context); // Pop migration preview
-                          
-                          // Navigate to new manga screen (replaces current stack)
+                          Navigator.pop(context);
+                          Navigator.pop(context);
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
@@ -221,5 +215,4 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
       ),
     );
   }
-
 }

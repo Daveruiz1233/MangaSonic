@@ -37,16 +37,12 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = context.watch<ThemeService>();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Palette Personalizer')),
       body: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 20),
-
-            // Mode Selector
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: SegmentedButton<bool>(
@@ -70,9 +66,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 },
               ),
             ),
-
             const SizedBox(height: 20),
-            // Color Wheel
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: RepaintBoundary(
@@ -88,10 +82,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
-            // Preview
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -114,9 +105,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: ElevatedButton(
@@ -148,10 +137,7 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 40),
-
-            // Presets
             if (!_isBackgroundMode) ...[
               _buildPresetSection('Sunset', [
                 const Color(0xFF4FC3F7),
@@ -176,21 +162,20 @@ class _PalettePersonalizerScreenState extends State<PalettePersonalizerScreen> {
               ]),
             ] else ...[
               _buildPresetSection('Dark Modes', [
-                const Color(0xFF121212), // Standard Material Dark
-                const Color(0xFF000000), // AMOLED Black
-                const Color(0xFF1C1C1E), // iOS Dark
-                const Color(0xFF0F172A), // Slate Dark
-                const Color(0xFF18181B), // Zinc Dark
+                const Color(0xFF121212),
+                const Color(0xFF000000),
+                const Color(0xFF1C1C1E),
+                const Color(0xFF0F172A),
+                const Color(0xFF18181B),
               ]),
               _buildPresetSection('Deep Tones', [
-                const Color(0xFF1A237E), // Deep Indigo
-                const Color(0xFF311B92), // Deep Purple
-                const Color(0xFF004D40), // Deep Teal
-                const Color(0xFF263238), // Blue Grey
-                const Color(0xFF3E2723), // Deep Brown
+                const Color(0xFF1A237E),
+                const Color(0xFF311B92),
+                const Color(0xFF004D40),
+                const Color(0xFF263238),
+                const Color(0xFF3E2723),
               ]),
             ],
-
             const SizedBox(height: 40),
           ],
         ),

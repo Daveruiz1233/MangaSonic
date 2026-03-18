@@ -39,9 +39,19 @@ class BlurredCoverBackground extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    accent.withValues(alpha: topOpacity),
-                    Colors.black.withValues(alpha: bottomOpacity),
+                    // Top: Dynamic color tint (strong)
+                    accent.withValues(alpha: 0.9),
+                    // Upper-middle: Dynamic color tint (medium)
+                    accent.withValues(alpha: 0.5),
+                    // Middle: Slightly blurred transparent
+                    Colors.transparent,
+                    // Lower-middle: Start fading to black
+                    Colors.black.withValues(alpha: 0.3),
+                    // Bottom: Black
+                    Colors.black.withValues(alpha: 0.85),
+                    Colors.black,
                   ],
+                  stops: const [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                 ),
               ),
             ),

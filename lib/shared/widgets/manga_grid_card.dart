@@ -55,7 +55,6 @@ class MangaGridCard extends StatelessWidget {
                 errorWidget: (context, url, error) =>
                     const Icon(Icons.error, color: Colors.white24),
               ),
-              // Gradient Overlay
               Positioned(
                 left: -5,
                 right: -5,
@@ -68,9 +67,11 @@ class MangaGridCard extends StatelessWidget {
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withValues(alpha: 0.8),
+                        Colors.black.withValues(alpha: 0.3),
+                        Colors.black.withValues(alpha: 0.85),
                         Colors.black,
                       ],
+                      stops: const [0.0, 0.3, 0.7, 1.0],
                     ),
                   ),
                   padding: const EdgeInsets.fromLTRB(8, 20, 8, 8),
@@ -94,41 +95,35 @@ class MangaGridCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Selection Overlay
               if (isSelected)
                 Positioned.fill(
                   child: Container(
-                    color: accent.withValues(alpha: 0.2),
-                    child: Center(
-                      child: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: accent,
-                        child: const Icon(Icons.check, color: Colors.white, size: 24),
+                    color: accent.withValues(alpha: 0.4),
+                    child: const Center(
+                      child: Icon(
+                        Icons.check_circle,
+                        color: Colors.white,
+                        size: 32,
                       ),
                     ),
                   ),
                 ),
-              // NEW Badge
-              if (hasUpdate)
+              if (hasUpdate && !isSelected)
                 Positioned(
-                  top: 6,
-                  right: 6,
+                  top: 8,
+                  right: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: theme.primaryColor,
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black45, blurRadius: 4),
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                        ),
                       ],
-                    ),
-                    child: const Text(
-                      'NEW',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                      ),
                     ),
                   ),
                 ),

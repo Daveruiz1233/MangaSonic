@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
+import 'package:manga_sonic/features/library/chapter_reader_screen.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/download_db.dart';
@@ -9,15 +9,15 @@ import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
-import 'package:manga_sonic/ui/widgets/source_tag.dart';
-import 'package:manga_sonic/ui/widgets/info_row.dart';
+import 'package:manga_sonic/shared/widgets/source_tag.dart';
+import 'package:manga_sonic/shared/widgets/info_row.dart';
 import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
 import 'package:manga_sonic/utils/palette_utils.dart';
 import 'package:manga_sonic/utils/source_registry.dart';
-import 'package:manga_sonic/ui/widgets/migration_preview_sheet.dart';
+import 'package:manga_sonic/shared/widgets/migration_preview_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import 'package:manga_sonic/ui/widgets/blurred_cover_background.dart';
+import 'package:manga_sonic/shared/widgets/blurred_cover_background.dart';
+import 'package:manga_sonic/features/library/manga_screen_widgets.dart';
 
 class MangaScreen extends StatefulWidget {
   final String mangaTitle;
@@ -72,7 +72,6 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
-
   Future<void> _fetchData() async {
     final cachedDetails = MangaCacheDB.getDetails(widget.mangaUrl);
 
@@ -83,10 +82,8 @@ class _MangaScreenState extends State<MangaScreen> {
           _isLoading = false;
         });
       }
-      // If we have cache, perform network sync silently in background
       _syncOnline();
     } else {
-      // No cache, must wait for network
       setState(() {
         _isLoading = true;
         _isOffline = false;
@@ -106,7 +103,6 @@ class _MangaScreenState extends State<MangaScreen> {
       );
       final details = await parser.fetchMangaDetails(manga);
 
-      // Save to cache if successfully fetched
       await MangaCacheDB.saveDetails(widget.mangaUrl, details);
 
       if (mounted) {
@@ -121,7 +117,6 @@ class _MangaScreenState extends State<MangaScreen> {
 
       if (e.toString().contains('403') || e.toString().contains('Cloudflare')) {
         if (mounted && _details == null) {
-          // Only show "Passing Cloudflare" message if we don't have ANY details yet
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Passing Cloudflare... Please wait.')),
           );
@@ -135,8 +130,7 @@ class _MangaScreenState extends State<MangaScreen> {
           _isLoading = false;
           if (_details != null) _isOffline = true;
         });
-        
-        // Only show error snackbar if we had no cache to show at all
+
         if (_details == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Network error: $e')),
@@ -146,17 +140,15 @@ class _MangaScreenState extends State<MangaScreen> {
     }
   }
 
-
   int _findContinueChapterIndex() {
     final chapters = _details?.chapters ?? [];
     if (chapters.isEmpty) return 0;
-    // Find the first unread chapter starting from the oldest (bottom of latest-first list)
     for (int i = chapters.length - 1; i >= 0; i--) {
       if (!HistoryDB.isRead(chapters[i].url)) {
         return i;
       }
     }
-    return 0; // Default to latest if all are read
+    return 0;
   }
 
   void _navigateToChapter(
@@ -217,13 +209,10 @@ class _MangaScreenState extends State<MangaScreen> {
       ),
       body: Stack(
         children: [
-          // Blurred background
           BlurredCoverBackground(
             imageUrl: widget.coverUrl,
             dominantColor: _dominantColor,
           ),
-
-          // Main content
           CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -233,11 +222,9 @@ class _MangaScreenState extends State<MangaScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header Section
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Cover Image
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: CachedNetworkImage(
@@ -248,7 +235,6 @@ class _MangaScreenState extends State<MangaScreen> {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          // Info
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,7 +268,6 @@ class _MangaScreenState extends State<MangaScreen> {
                                   text: _details!.status,
                                 ),
                                 const SizedBox(height: 12),
-                                // Genre Tags
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
@@ -295,10 +280,7 @@ class _MangaScreenState extends State<MangaScreen> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Action Buttons Row
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
@@ -326,14 +308,10 @@ class _MangaScreenState extends State<MangaScreen> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Description
                       GestureDetector(
                         onTap: () => setState(
-                          () =>
-                              _isDescriptionExpanded = !_isDescriptionExpanded,
+                          () => _isDescriptionExpanded = !_isDescriptionExpanded,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,22 +329,16 @@ class _MangaScreenState extends State<MangaScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _isDescriptionExpanded
-                                  ? "Show Less"
-                                  : "Show More",
+                              _isDescriptionExpanded ? "Show Less" : "Show More",
                               style: TextStyle(
-                                color:
-                                    _dominantColor ?? Colors.deepPurpleAccent,
+                                color: _dominantColor ?? Colors.deepPurpleAccent,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
-                      // Action Row (Mark all, Refresh, etc)
                       Row(
                         children: [
                           const Text(
@@ -414,8 +386,6 @@ class _MangaScreenState extends State<MangaScreen> {
                   ),
                 ),
               ),
-
-              // Chapter List
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final chapter = chapters[index];
@@ -427,8 +397,7 @@ class _MangaScreenState extends State<MangaScreen> {
                       style: TextStyle(
                         color: isRead ? Colors.white38 : Colors.white,
                         fontSize: 15,
-                        fontWeight:
-                            isRead ? FontWeight.normal : FontWeight.w600,
+                        fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
                       ),
                     ),
                     subtitle: chapter.releaseDate != null
@@ -471,8 +440,6 @@ class _MangaScreenState extends State<MangaScreen> {
                   );
                 }, childCount: chapters.length),
               ),
-
-              // Suggestions
               if (_details!.suggestions.isNotEmpty) ...[
                 const SliverToBoxAdapter(
                   child: Padding(
@@ -505,8 +472,6 @@ class _MangaScreenState extends State<MangaScreen> {
               ],
             ],
           ),
-
-          // Floating Start/Continue Button
           Positioned(
             bottom: 24,
             left: 24,
@@ -558,68 +523,12 @@ class _MangaScreenState extends State<MangaScreen> {
     );
   }
 
-
   Widget _genreTag(String genre) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        genre,
-        style: const TextStyle(color: Colors.white70, fontSize: 11),
-      ),
-    );
+    return GenreTag(genre: genre);
   }
 
   Widget _suggestionItem(Manga manga) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MangaScreen(
-              mangaTitle: manga.title,
-              mangaUrl: manga.url,
-              coverUrl: manga.coverUrl,
-              sourceId: manga.sourceId,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: 110,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: CachedNetworkImage(
-                imageUrl: manga.coverUrl,
-                width: 110,
-                height: 150,
-                fit: BoxFit.cover,
-                errorWidget: (context, url, error) =>
-                    Container(color: Colors.grey[900]),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              manga.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return SuggestionItem(manga: manga);
   }
 
   void _toggleSave() async {
@@ -629,7 +538,6 @@ class _MangaScreenState extends State<MangaScreen> {
     } else {
       final categories = LibraryDB.getCategories();
       if (categories.isEmpty) {
-        // Default backup if no categories
         final item = LibraryItem(
           mangaUrl: widget.mangaUrl,
           title: widget.mangaTitle,
@@ -686,10 +594,7 @@ class _MangaScreenState extends State<MangaScreen> {
   Future<void> _downloadChapters(List<Chapter> chapters) async {
     if (chapters.isEmpty) return;
 
-    // Bulk downloads: descending order to ascending (oldest to newest)
-    final downloadList = chapters.length > 1
-        ? chapters.reversed.toList()
-        : chapters;
+    final downloadList = chapters.length > 1 ? chapters.reversed.toList() : chapters;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -699,7 +604,6 @@ class _MangaScreenState extends State<MangaScreen> {
 
     for (var chapter in downloadList) {
       try {
-        // Note: DownloadManager will soon handle queueing internally
         await DownloadManager().downloadChapter(
           chapterUrl: chapter.url,
           chapterTitle: chapter.title,
@@ -829,7 +733,7 @@ class _MangaScreenState extends State<MangaScreen> {
                             ),
                           ),
                           onTap: () {
-                            Navigator.pop(context); // Close search list
+                            Navigator.pop(context);
                             showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
@@ -938,45 +842,12 @@ class _MangaScreenState extends State<MangaScreen> {
     required VoidCallback onTap,
     bool isPrimary = false,
   }) {
-    final color = isPrimary
-        ? (_dominantColor ?? Colors.deepPurpleAccent)
-        : Colors.white.withValues(alpha: 0.05);
-    
-    final isDark = ThemeData.estimateBrightnessForColor(color) == Brightness.dark;
-    final textColor = isPrimary 
-        ? (isDark ? Colors.white : Colors.black) 
-        : Colors.white70;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 80),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: textColor, size: 22),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return MangaActionButton(
+      icon: icon,
+      label: label,
+      onTap: onTap,
+      isPrimary: isPrimary,
+      dominantColor: _dominantColor,
     );
   }
 

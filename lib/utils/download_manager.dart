@@ -46,6 +46,10 @@ class DownloadManager extends ChangeNotifier {
   // Tracks which chapter URLs have been requested to cancel
   final Set<String> _cancelledChapters = {};
 
+  // Debouncing for connectivity changes to avoid false positives
+  DateTime? _lastConnectivityChange;
+  static const _connectivityDebounce = Duration(seconds: 3);
+
   Future<void> init() async {
     // Load persisted queue
     final savedQueue = QueueDB.getQueue();
@@ -55,22 +59,31 @@ class DownloadManager extends ChangeNotifier {
     final result = await _connectivity.checkConnectivity();
     _isOffline = result.contains(ConnectivityResult.none);
 
-    // Listen for changes
+    // Listen for changes with debouncing
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
       results,
     ) {
-      final wasOffline = _isOffline;
-      _isOffline = results.contains(ConnectivityResult.none);
+      _lastConnectivityChange = DateTime.now();
+      final changeTime = _lastConnectivityChange;
 
-      if (wasOffline && !_isOffline && _queue.isNotEmpty && !_isProcessing) {
-        debugPrint('Internet restored, resuming downloads...');
-        _processQueue();
-      } else if (_isOffline) {
-        debugPrint(
-          'Internet lost, downloads will pause after current chunk...',
-        );
-      }
-      notifyListeners();
+      // Debounce: wait 3 seconds before acting on connectivity change
+      Future.delayed(_connectivityDebounce, () {
+        // Only process if this is still the most recent change
+        if (_lastConnectivityChange != changeTime) return;
+
+        final wasOffline = _isOffline;
+        _isOffline = results.contains(ConnectivityResult.none);
+
+        if (wasOffline && !_isOffline && _queue.isNotEmpty && !_isProcessing) {
+          debugPrint('Internet restored, resuming downloads...');
+          _processQueue();
+        } else if (_isOffline) {
+          debugPrint(
+            'Internet lost, downloads will pause after current chunk...',
+          );
+        }
+        notifyListeners();
+      });
     });
 
     if (!_isOffline && _queue.isNotEmpty) {
@@ -220,10 +233,8 @@ class DownloadManager extends ChangeNotifier {
   }
 
   Future<void> _executeSafe(DownloadTask task) async {
-    bool wasCancelled = false;
     try {
       await _executeTask(task);
-      wasCancelled = _cancelledChapters.contains(task.chapterUrl);
     } catch (e) {
       debugPrint('Error processing task ${task.chapterTitle}: $e');
       _statuses.remove(task.chapterUrl);

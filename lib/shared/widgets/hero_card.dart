@@ -14,7 +14,7 @@ class HeroCard extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback? onContinue;
   final HeroCardMode mode;
-  
+
   // Download mode specifics
   final List<String>? completedChapters;
   final List<String>? queuedChapters;
@@ -75,7 +75,6 @@ class _HeroCardState extends State<HeroCard> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -99,7 +98,6 @@ class _HeroCardState extends State<HeroCard> {
                   blurRadius: 20,
                   offset: const Offset(0, 15),
                 ),
-                // Soft bottom glow to hide the "line"
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.4),
                   blurRadius: 25,
@@ -113,7 +111,6 @@ class _HeroCardState extends State<HeroCard> {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Background Cover with Dimmer
                   Positioned.fill(
                     child: CachedNetworkImage(
                       imageUrl: widget.manga.coverUrl,
@@ -131,20 +128,27 @@ class _HeroCardState extends State<HeroCard> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            accent.withValues(alpha: 0.8),
+                            // Top: Dynamic color tint (strong)
+                            accent.withValues(alpha: 0.9),
+                            // Upper-middle: Dynamic color tint (medium)
+                            accent.withValues(alpha: 0.5),
+                            // Middle: Slightly blurred transparent
+                            Colors.transparent,
+                            // Lower-middle: Start fading to black
+                            Colors.black.withValues(alpha: 0.3),
+                            // Bottom: Black
+                            Colors.black.withValues(alpha: 0.85),
                             Colors.black,
                           ],
+                          stops: const [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                         ),
                       ),
                     ),
                   ),
-                  
-                  // Content
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        // Cover
                         Hero(
                           tag: 'hero-cover-${widget.manga.url}-${widget.mode.name}',
                           child: ClipRRect(
@@ -158,7 +162,6 @@ class _HeroCardState extends State<HeroCard> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,22 +199,21 @@ class _HeroCardState extends State<HeroCard> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                                if (isReading && widget.genres.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      widget.genres.join(' • '),
-                                      style: TextStyle(
-                                        color: accent.withValues(alpha: 0.6),
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                              if (isReading && widget.genres.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    widget.genres.join(' • '),
+                                    style: TextStyle(
+                                      color: accent.withValues(alpha: 0.6),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                const SizedBox(height: 12),
-                              // Bottom Row (Actions)
+                                ),
+                              const SizedBox(height: 12),
                               _buildActionArea(accent, theme),
                             ],
                           ),
@@ -265,12 +267,14 @@ class _HeroCardState extends State<HeroCard> {
               ),
             ),
             onPressed: widget.onContinue,
-            child: const Text('CONTINUE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
+            child: const Text('CONTINUE',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
           ),
         ],
       );
     } else {
-      final total = (widget.completedChapters?.length ?? 0) + (widget.queuedChapters?.length ?? 0);
+      final total = (widget.completedChapters?.length ?? 0) +
+          (widget.queuedChapters?.length ?? 0);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -289,7 +293,8 @@ class _HeroCardState extends State<HeroCard> {
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.cancel, color: Colors.white54, size: 22),
+                icon:
+                    const Icon(Icons.cancel, color: Colors.white54, size: 22),
                 onPressed: widget.onCancel,
               ),
             ],
@@ -299,15 +304,21 @@ class _HeroCardState extends State<HeroCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               GestureDetector(
-                onTap: () => setState(() => _isChaptersExpanded = !_isChaptersExpanded),
+                onTap: () =>
+                    setState(() => _isChaptersExpanded = !_isChaptersExpanded),
                 child: Row(
                   children: [
                     Text(
                       '${widget.completedChapters?.length ?? 0} / $total Chapters',
-                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
                     ),
                     Icon(
-                      _isChaptersExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                      _isChaptersExpanded
+                          ? Icons.arrow_drop_up
+                          : Icons.arrow_drop_down,
                       color: accent,
                       size: 18,
                     ),
@@ -316,7 +327,10 @@ class _HeroCardState extends State<HeroCard> {
               ),
               Text(
                 '${((widget.overallProgress ?? 0) * 100).toInt()}%',
-                style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                    color: accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -326,12 +340,15 @@ class _HeroCardState extends State<HeroCard> {
   }
 
   Widget _buildChaptersList(Color accent) {
-    final all = [...widget.completedChapters ?? [], ...widget.queuedChapters ?? []];
+    final all = [
+      ...widget.completedChapters ?? [],
+      ...widget.queuedChapters ?? []
+    ];
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(12),
       constraints: const BoxConstraints(maxHeight: 150),
-       decoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.grey[900]?.withValues(alpha: 0.5),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
@@ -354,7 +371,10 @@ class _HeroCardState extends State<HeroCard> {
                       onPressed: widget.onSelectAll,
                       child: Text(
                         'Select All',
-                        style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   if (widget.onUnselectAll != null)
@@ -367,7 +387,10 @@ class _HeroCardState extends State<HeroCard> {
                       onPressed: widget.onUnselectAll,
                       child: const Text(
                         'Unselect All',
-                        style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                 ],
@@ -380,38 +403,56 @@ class _HeroCardState extends State<HeroCard> {
               itemCount: all.length,
               itemBuilder: (context, index) {
                 final chap = all[index];
-                final isDone = widget.completedChapters?.contains(chap) ?? false;
-                final isSelected = widget.selectedChapterTitles?.contains(chap) ?? false;
+                final isDone =
+                    widget.completedChapters?.contains(chap) ?? false;
+                final isSelected =
+                    widget.selectedChapterTitles?.contains(chap) ?? false;
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Material(
                     color: Colors.transparent,
                     child: ListTile(
-                      onTap: widget.onChapterTap != null ? () => widget.onChapterTap!(chap) : null,
-                      onLongPress: widget.onChapterLongPress != null ? () => widget.onChapterLongPress!(chap) : null,
+                      onTap: widget.onChapterTap != null
+                          ? () => widget.onChapterTap!(chap)
+                          : null,
+                      onLongPress: widget.onChapterLongPress != null
+                          ? () => widget.onChapterLongPress!(chap)
+                          : null,
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      tileColor: isSelected ? accent.withValues(alpha: 0.15) : null,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      tileColor:
+                          isSelected ? accent.withValues(alpha: 0.15) : null,
                       leading: Icon(
-                        isSelected 
-                          ? Icons.check_box 
-                          : (isDone ? Icons.check_circle : Icons.downloading),
+                        isSelected
+                            ? Icons.check_box
+                            : (isDone
+                                ? Icons.check_circle
+                                : Icons.downloading),
                         size: 16,
-                        color: isSelected ? accent : (isDone ? Colors.greenAccent : accent.withValues(alpha: 0.6)),
+                        color: isSelected
+                            ? accent
+                            : (isDone
+                                ? Colors.greenAccent
+                                : accent.withValues(alpha: 0.6)),
                       ),
                       title: Text(
                         chap,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.white70,
+                          color:
+                              isSelected ? Colors.white : Colors.white70,
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: isSelected ? Icon(Icons.check, color: accent, size: 14) : null,
+                      trailing: isSelected
+                          ? Icon(Icons.check, color: accent, size: 14)
+                          : null,
                     ),
                   ),
                 );

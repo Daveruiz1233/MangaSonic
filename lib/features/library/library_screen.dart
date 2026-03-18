@@ -4,13 +4,13 @@ import 'package:manga_sonic/data/db/library_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
 import 'package:manga_sonic/data/models/library_models.dart';
-import 'package:manga_sonic/ui/screens/manga_screen.dart';
-import 'package:manga_sonic/ui/widgets/hero_card.dart';
-import 'package:manga_sonic/ui/screens/chapter_reader_screen.dart';
+import 'package:manga_sonic/features/library/manga_screen.dart';
+import 'package:manga_sonic/shared/widgets/hero_card.dart';
+import 'package:manga_sonic/features/library/chapter_reader_screen.dart';
 import 'package:manga_sonic/utils/library_update_service.dart';
 import 'package:manga_sonic/utils/recently_read_resolver.dart';
-import 'package:manga_sonic/ui/mixins/selection_mode_mixin.dart';
-import 'package:manga_sonic/ui/widgets/manga_grid_card.dart';
+import 'package:manga_sonic/shared/mixins/selection_mode_mixin.dart';
+import 'package:manga_sonic/shared/widgets/manga_grid_card.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -23,7 +23,6 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
   late List<LibraryCategory> _categories;
   late List<LibraryItem> _items;
   String _selectedCategoryId = 'all';
-
 
   // Search state
   final TextEditingController _searchController = TextEditingController();
@@ -43,13 +42,12 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
         ...dbCategories,
       ];
       _items = LibraryDB.getItems();
-      
+
       if (!_categories.any((c) => c.id == _selectedCategoryId)) {
         _selectedCategoryId = 'all';
       }
     });
   }
-
 
   void _deleteSelected() {
     showDialog(
@@ -124,16 +122,16 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     final searchQuery = _searchController.text.toLowerCase();
-    
+
     final recentlyRead = RecentlyReadResolver.resolve(_items);
     final recentlyReadUrl = recentlyRead?.manga.url;
 
     final filteredItems = _items.where((i) {
-      final matchesCategory = _selectedCategoryId == 'all' || i.categoryId == _selectedCategoryId;
+      final matchesCategory =
+          _selectedCategoryId == 'all' || i.categoryId == _selectedCategoryId;
       final matchesSearch = i.title.toLowerCase().contains(searchQuery);
       final isNotRecentlyRead = i.mangaUrl != recentlyReadUrl;
       return matchesCategory && matchesSearch && isNotRecentlyRead;
@@ -142,7 +140,8 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
     final List<LibraryItem> currentItems;
     if (_selectedCategoryId == 'all') {
       final seenUrls = <String>{};
-      currentItems = filteredItems.where((item) => seenUrls.add(item.mangaUrl)).toList();
+      currentItems =
+          filteredItems.where((item) => seenUrls.add(item.mangaUrl)).toList();
     } else {
       currentItems = filteredItems;
     }
@@ -282,7 +281,6 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
               ),
             ),
           ),
-
           if (recentlyRead != null && !_isSearching)
             SliverToBoxAdapter(
               child: HeroCard(
@@ -332,7 +330,6 @@ class _LibraryScreenState extends State<LibraryScreen> with SelectionModeMixin {
                 },
               ),
             ),
-
           SliverPadding(
             padding: const EdgeInsets.all(8.0),
             sliver: SliverGrid(

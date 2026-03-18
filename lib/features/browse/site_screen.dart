@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:manga_sonic/ui/screens/manga_screen.dart';
-import 'package:manga_sonic/ui/widgets/manga_grid_card.dart';
+import 'package:manga_sonic/features/library/manga_screen.dart';
+import 'package:manga_sonic/shared/widgets/manga_grid_card.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
@@ -72,7 +72,6 @@ class _SiteScreenState extends State<SiteScreen> {
           );
         }
         await CloudflareInterceptor.bypass(widget.siteUrl);
-        // Retry once
         return _fetchData();
       }
       if (!mounted) return;
