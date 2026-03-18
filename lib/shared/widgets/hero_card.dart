@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/utils/palette_utils.dart';
@@ -93,10 +94,16 @@ class _HeroCardState extends State<HeroCard> {
               color: Colors.black,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
+                // Dynamic glow effect on borders
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.15),
-                  blurRadius: 20,
-                  offset: const Offset(0, 15),
+                  color: accent.withValues(alpha: 0.4),
+                  blurRadius: 15,
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.2),
+                  blurRadius: 30,
+                  spreadRadius: 2,
                 ),
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.4),
@@ -117,6 +124,7 @@ class _HeroCardState extends State<HeroCard> {
                       fit: BoxFit.cover,
                     ),
                   ),
+                  // Vertical gradient overlay: black → dynamic tint → black
                   Positioned(
                     left: -8,
                     right: -8,
@@ -128,20 +136,89 @@ class _HeroCardState extends State<HeroCard> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            // Top: Dynamic color tint (strong)
-                            accent.withValues(alpha: 0.9),
-                            // Upper-middle: Dynamic color tint (medium)
-                            accent.withValues(alpha: 0.5),
-                            // Middle: Slightly blurred transparent
-                            Colors.transparent,
-                            // Lower-middle: Start fading to black
-                            Colors.black.withValues(alpha: 0.3),
-                            // Bottom: Black
+                            // Top: Strong black
                             Colors.black.withValues(alpha: 0.85),
-                            Colors.black,
+                            // Upper: Black fading quickly
+                            Colors.black.withValues(alpha: 0.4),
+                            // Upper-middle: Dynamic tint emerging
+                            accent.withValues(alpha: 0.25),
+                            // Middle: Dynamic tint (reduced brightness)
+                            accent.withValues(alpha: 0.7),
+                            accent.withValues(alpha: 0.7),
+                            // Lower-middle: Dynamic tint fading
+                            accent.withValues(alpha: 0.25),
+                            // Lower: Black fading quickly
+                            Colors.black.withValues(alpha: 0.4),
+                            // Bottom: Strong black
+                            Colors.black.withValues(alpha: 0.85),
                           ],
-                          stops: const [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                          stops: const [0.0, 0.15, 0.3, 0.45, 0.55, 0.7, 0.85, 1.0],
                         ),
+                      ),
+                    ),
+                  ),
+                  // Horizontal gradient overlay: black on left side (cover area)
+                  Positioned(
+                    left: -8,
+                    right: -8,
+                    top: -8,
+                    bottom: -8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            // Left (cover area): Strong black
+                            Colors.black.withValues(alpha: 0.85),
+                            // Center-left: Fading out
+                            Colors.black.withValues(alpha: 0.5),
+                            // Center: Lighter
+                            Colors.black.withValues(alpha: 0.2),
+                            // Right: Transparent
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.25, 0.45, 0.7],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Horizontal gradient overlay: black on right side
+                  Positioned(
+                    left: -8,
+                    right: -8,
+                    top: -8,
+                    bottom: -8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerRight,
+                          end: Alignment.centerLeft,
+                          colors: [
+                            // Right: Strong black
+                            Colors.black.withValues(alpha: 0.85),
+                            // Center-right: Fading out
+                            Colors.black.withValues(alpha: 0.5),
+                            // Center: Lighter
+                            Colors.black.withValues(alpha: 0.2),
+                            // Left: Transparent
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.25, 0.45, 0.7],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Subtle blur on middle section
+                  Positioned(
+                    left: -8,
+                    right: -8,
+                    top: 60,
+                    bottom: 60,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
+                      child: Container(
+                        color: Colors.transparent,
                       ),
                     ),
                   ),
