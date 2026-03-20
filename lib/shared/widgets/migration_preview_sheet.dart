@@ -6,7 +6,7 @@ import 'package:manga_sonic/utils/migration_utils.dart';
 import 'package:manga_sonic/utils/palette_utils.dart';
 import 'package:manga_sonic/shared/widgets/source_tag.dart';
 import 'package:manga_sonic/shared/widgets/info_row.dart';
-import 'package:manga_sonic/shared/widgets/blurred_cover_background.dart';
+import 'package:manga_sonic/shared/widgets/safe_blurred_cover_background.dart';
 import 'package:manga_sonic/features/library/manga_screen.dart';
 
 class MigrationPreviewSheet extends StatefulWidget {
@@ -74,12 +74,9 @@ class _MigrationPreviewSheetState extends State<MigrationPreviewSheet> {
       child: Stack(
         children: [
           if (!_isLoading && _error == null)
-            BlurredCoverBackground(
+            SafeBlurredCoverBackground(
               imageUrl: widget.targetManga.coverUrl,
               dominantColor: _dominantColor,
-              blurSigma: 20,
-              topOpacity: 0.15,
-              bottomOpacity: 1.0,
             ),
           Padding(
             padding: const EdgeInsets.all(24),

@@ -124,7 +124,7 @@ class _HeroCardState extends State<HeroCard> {
                       fit: BoxFit.cover,
                     ),
                   ),
-                  // Vertical gradient overlay: black → dynamic tint → black
+                  // Vertical gradient overlay: intensified black-only vignette
                   Positioned(
                     left: -8,
                     right: -8,
@@ -136,23 +136,16 @@ class _HeroCardState extends State<HeroCard> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            // Top: Strong black
                             Colors.black.withValues(alpha: 0.85),
-                            // Upper: Black fading quickly
-                            Colors.black.withValues(alpha: 0.4),
-                            // Upper-middle: Dynamic tint emerging
-                            accent.withValues(alpha: 0.25),
-                            // Middle: Dynamic tint (reduced brightness)
-                            accent.withValues(alpha: 0.7),
-                            accent.withValues(alpha: 0.7),
-                            // Lower-middle: Dynamic tint fading
-                            accent.withValues(alpha: 0.25),
-                            // Lower: Black fading quickly
-                            Colors.black.withValues(alpha: 0.4),
-                            // Bottom: Strong black
+                            Colors.black.withValues(alpha: 0.65),
+                            Colors.black.withValues(alpha: 0.5),
+                            Colors.black.withValues(alpha: 0.35),
+                            Colors.black.withValues(alpha: 0.35),
+                            Colors.black.withValues(alpha: 0.5),
+                            Colors.black.withValues(alpha: 0.65),
                             Colors.black.withValues(alpha: 0.85),
                           ],
-                          stops: const [0.0, 0.15, 0.3, 0.45, 0.55, 0.7, 0.85, 1.0],
+                          stops: const [0.0, 0.12, 0.3, 0.45, 0.55, 0.7, 0.88, 1.0],
                         ),
                       ),
                     ),
@@ -209,14 +202,14 @@ class _HeroCardState extends State<HeroCard> {
                       ),
                     ),
                   ),
-                  // Subtle blur on middle section
+                  // Stronger blur on middle section
                   Positioned(
                     left: -8,
                     right: -8,
                     top: 60,
                     bottom: 60,
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
+                      filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
                       child: Container(
                         color: Colors.transparent,
                       ),

@@ -16,7 +16,7 @@ import 'package:manga_sonic/utils/palette_utils.dart';
 import 'package:manga_sonic/utils/source_registry.dart';
 import 'package:manga_sonic/shared/widgets/migration_preview_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:manga_sonic/shared/widgets/blurred_cover_background.dart';
+import 'package:manga_sonic/shared/widgets/safe_blurred_cover_background.dart';
 import 'package:manga_sonic/features/library/manga_screen_widgets.dart';
 
 class MangaScreen extends StatefulWidget {
@@ -184,6 +184,38 @@ class _MangaScreenState extends State<MangaScreen> {
     }
 
     final chapters = _details!.chapters;
+    if (chapters.isEmpty) {
+      return Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: AnimatedOpacity(
+            opacity: _opacity,
+            duration: const Duration(milliseconds: 200),
+            child: Text(widget.mangaTitle),
+          ),
+        ),
+        body: Stack(
+          children: [
+            SafeBlurredCoverBackground(
+              imageUrl: widget.coverUrl,
+              dominantColor: _dominantColor,
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text(
+                  'No chapters available for this manga.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final hasStartedReading = chapters.any(
       (ch) => HistoryDB.isRead(ch.url) || HistoryDB.getLastPage(ch.url) > 0,
     );
@@ -209,7 +241,7 @@ class _MangaScreenState extends State<MangaScreen> {
       ),
       body: Stack(
         children: [
-          BlurredCoverBackground(
+          SafeBlurredCoverBackground(
             imageUrl: widget.coverUrl,
             dominantColor: _dominantColor,
           ),

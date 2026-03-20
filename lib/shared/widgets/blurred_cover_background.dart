@@ -30,38 +30,34 @@ class BlurredCoverBackground extends StatelessWidget {
             fit: BoxFit.cover,
           ),
         ),
-        // Vertical gradient overlay: black → dynamic tint → black
+        // Vertical gradient overlay: intensified black-only vignette
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  // Top: Strong black
-                  Colors.black,
-                  Colors.black,
+              gradient: (() {
+                final verticalColors = [
                   Colors.black.withValues(alpha: 0.85),
-                  // Upper: Black fading quickly
-                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black.withValues(alpha: 0.7),
+                  Colors.black.withValues(alpha: 0.55),
                   Colors.black.withValues(alpha: 0.4),
-                  // Upper-middle: Dynamic tint emerging
-                  accent.withValues(alpha: 0.25),
-                  // Middle: Dynamic tint (reduced brightness)
-                  accent.withValues(alpha: 0.7),
-                  accent.withValues(alpha: 0.7),
-                  // Lower-middle: Dynamic tint fading
-                  accent.withValues(alpha: 0.25),
-                  // Lower: Black fading quickly
                   Colors.black.withValues(alpha: 0.4),
-                  Colors.black.withValues(alpha: 0.8),
-                  // Bottom: Strong black
+                  Colors.black.withValues(alpha: 0.55),
+                  Colors.black.withValues(alpha: 0.7),
                   Colors.black.withValues(alpha: 0.85),
-                  Colors.black,
-                  Colors.black,
-                ],
-                stops: const [0.0, 0.15, 0.3, 0.45, 0.55, 0.7, 0.85, 1.0],
-              ),
+                ];
+
+                final stops = List<double>.generate(
+                  verticalColors.length,
+                  (i) => verticalColors.length == 1 ? 0.0 : i / (verticalColors.length - 1),
+                );
+
+                return LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: verticalColors,
+                  stops: stops,
+                );
+              })(),
             ),
           ),
         ),
@@ -109,14 +105,14 @@ class BlurredCoverBackground extends StatelessWidget {
             ),
           ),
         ),
-        // Subtle blur on middle section
+        // Stronger blur on middle section
         Positioned(
           left: 0,
           right: 0,
           top: MediaQuery.of(context).size.height * 0.2,
           bottom: MediaQuery.of(context).size.height * 0.2,
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
+            filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
             child: Container(
               color: Colors.transparent,
             ),

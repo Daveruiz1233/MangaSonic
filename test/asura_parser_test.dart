@@ -43,7 +43,7 @@ void main() {
     );
 
     print('\n--- Testing fetchChapterImages ---');
-    final chapter = details.chapters.first;
+    final chapter = details.chapters.last; // Use oldest chapter to avoid login/locked issues
     print('Testing chapter: ${chapter.title} (${chapter.url})');
     final images = await parser.fetchChapterImages(chapter.url);
     print('Found ${images.length} images');

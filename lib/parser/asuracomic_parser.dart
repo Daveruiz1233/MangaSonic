@@ -5,86 +5,125 @@ import 'dart:convert';
 
 class AsuraComicParser extends BaseParser {
   AsuraComicParser()
-    : super(siteName: 'AsuraComic', baseUrl: 'https://asuracomic.net');
+    : super(siteName: 'AsuraComic', baseUrl: 'https://asurascans.com');
 
   /// Finds the main manga grid container by checking for the distinctive
   /// class combination: grid-cols-2 + md:grid-cols-5 + gap-3 + p-4.
   /// This filters out the sidebar "Popular" section and other grids.
   dynamic _findMainGrid(dynamic document) {
-    final divs = document.querySelectorAll('div');
-    for (var div in divs) {
-      final cl = div.className.toString();
-      if (cl.contains('md:grid-cols-5') &&
-          cl.contains('gap-3') &&
-          cl.contains('p-4')) {
-        return div;
-      }
-    }
+    // In the new Astro site, the grid doesn't have a single unique "grid-cols-X" container 
+    // that's easy to target consistently. Instead, we'll look for the container 
+    // that holds multiple manga link tags.
+    final items = document.querySelectorAll('a[href*="/comics/"]');
+    if (items.isNotEmpty) return document; // Return document as "container" and parse all links
     return null;
   }
 
   List<Manga> _parseMangaGrid(dynamic container) {
     if (container == null) return [];
 
-    final links = container.querySelectorAll('a');
     final List<Manga> list = [];
 
-    for (var aTag in links) {
-      final href = aTag.attributes['href'] ?? '';
-      if (href.isEmpty || !href.contains('series/')) continue;
+    // The new site uses /comics/ prefixed links for series
+    // Look for the card containers
+    final cards = container.querySelectorAll('.series-card');
+    if (cards.isNotEmpty) {
+      for (var card in cards) {
+        final links = card.querySelectorAll('a[href*="/comics/"]');
+        if (links.isEmpty) continue;
 
-      final url = Uri.parse(baseUrl).resolve(href).toString();
-      if (list.any((m) => m.url == url)) continue;
+        final aTag = links.first;
+        final href = aTag.attributes['href'] ?? '';
+        final url = Uri.parse(baseUrl).resolve(href).toString();
+        if (list.any((m) => m.url == url)) continue;
 
-      // Title: span with class containing "font-bold" and "block"
-      String title = '';
-      final spans = aTag.querySelectorAll('span');
-      for (var s in spans) {
-        final cl = s.className.toString();
-        if (cl.contains('block') && cl.contains('font-bold')) {
-          title = s.text.trim();
-          break;
+        String title = '';
+        String coverUrl = '';
+
+        // Title is usually in an h3 within one of the links
+        for (var link in links) {
+          final h3 = link.querySelector('h3');
+          if (h3 != null) {
+            title = h3.text.trim();
+            break;
+          }
+        }
+
+        // Cover is usually in an img within one of the links
+        for (var link in links) {
+          final img = link.querySelector('img');
+          if (img != null) {
+            coverUrl = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
+            if (coverUrl.isNotEmpty) break;
+          }
+        }
+
+        // Fallback for title
+        if (title.isEmpty) {
+          for (var link in links) {
+            final spans = link.querySelectorAll('span');
+            for (var s in spans) {
+              final t = s.text.trim();
+              if (t.isNotEmpty && t != 'Manga' && t != 'Manhwa' && t != 'Manhua' && !t.contains('.')) {
+                title = t;
+                break;
+              }
+            }
+            if (title.isNotEmpty) break;
+          }
+        }
+
+        if (title.isNotEmpty) {
+          list.add(
+            Manga(
+              title: title,
+              url: url,
+              coverUrl: coverUrl,
+              sourceId: 'asuracomic',
+            ),
+          );
         }
       }
+    } else {
+      // Fallback to original link-based approach if .series-card is not found
+      final links = container.querySelectorAll('a[href*="/comics/"]');
+      for (var aTag in links) {
+        final href = aTag.attributes['href'] ?? '';
+        if (href.isEmpty) continue;
 
-      // Fallback: first span with font-bold that isn't a status label
-      if (title.isEmpty) {
-        for (var s in spans) {
-          final t = s.text.trim();
-          if (t.isEmpty) continue;
-          if (t == 'MANHWA' ||
-              t == 'MANHUA' ||
-              t == 'MANGA' ||
-              t == 'MANGATOON')
-            continue;
-          if (t == 'Ongoing' ||
-              t == 'Completed' ||
-              t == 'Hiatus' ||
-              t == 'Dropped')
-            continue;
-          final cl = s.className.toString();
-          if (cl.contains('font-bold') || cl.contains('font-[600]')) {
+        final url = Uri.parse(baseUrl).resolve(href).toString();
+        if (list.any((m) => m.url == url)) continue;
+
+        String title = '';
+        final h3 = aTag.querySelector('h3');
+        if (h3 != null) {
+          title = h3.text.trim();
+        }
+
+        if (title.isEmpty) {
+          final spans = aTag.querySelectorAll('span');
+          for (var s in spans) {
+            final t = s.text.trim();
+            if (t.isEmpty || t == 'Manga' || t == 'Manhwa' || t == 'Manhua' || t.contains('.')) continue;
             title = t;
             break;
           }
         }
+
+        final img = aTag.querySelector('img');
+        final coverUrl = img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
+
+        if (title.isNotEmpty) {
+          list.add(
+            Manga(
+              title: title,
+              url: url,
+              coverUrl: coverUrl,
+              sourceId: 'asuracomic',
+            ),
+          );
+        }
       }
-
-      if (title.isEmpty) continue;
-
-      // Cover image
-      final img = aTag.querySelector('img');
-      final coverUrl =
-          img?.attributes['src'] ?? img?.attributes['data-src'] ?? '';
-
-      list.add(
-        Manga(
-          title: title,
-          url: url,
-          coverUrl: coverUrl,
-          sourceId: 'asuracomic',
-        ),
-      );
     }
 
     return list;
@@ -92,7 +131,8 @@ class AsuraComicParser extends BaseParser {
 
   @override
   Future<List<Manga>> fetchMangaList(int page) async {
-    final response = await getRequest('$baseUrl/series?page=$page');
+    // The new site uses /comics for listing
+    final response = await getRequest('$baseUrl/comics?page=$page');
     final document = parser.parse(response.body);
     final grid = _findMainGrid(document);
     return _parseMangaGrid(grid);
@@ -100,7 +140,8 @@ class AsuraComicParser extends BaseParser {
 
   @override
   Future<List<Manga>> searchManga(String query, int page) async {
-    final response = await getRequest('$baseUrl/series?name=$query&page=$page');
+    // Search is also integrated into /comics or /search
+    final response = await getRequest('$baseUrl/comics?q=$query&page=$page');
     final document = parser.parse(response.body);
     final grid = _findMainGrid(document);
     return _parseMangaGrid(grid);
@@ -177,15 +218,17 @@ class AsuraComicParser extends BaseParser {
     final response = await getRequest(manga.url);
     final document = parser.parse(response.body);
 
-    // Description: span with color text-[#A2A2A2]
+    // Description: Look for div with id="description-text"
     String description = '';
-    final spans = document.querySelectorAll('span');
-    for (var span in spans) {
-      if (span.classes.any((c) => c.contains('text-[#A2A2A2]'))) {
-        final t = span.text.trim();
-        if (t.length > 20) {
-          // Avoid short labels
-          description = t;
+    final descDiv = document.querySelector('#description-text');
+    if (descDiv != null) {
+      description = descDiv.text.trim();
+    } else {
+      // Fallback to p tags with specific style
+      final pTags = document.querySelectorAll('p');
+      for (var p in pTags) {
+        if (p.classes.any((c) => c.contains('text-white/80'))) {
+          description = p.text.trim();
           break;
         }
       }
@@ -196,37 +239,27 @@ class AsuraComicParser extends BaseParser {
     String artist = 'Unknown';
     String status = 'Unknown';
 
-    final h3s = document.querySelectorAll('h3');
-    for (var i = 0; i < h3s.length; i++) {
-      final text = h3s[i].text.trim().toLowerCase();
-      if (text == 'author' && i + 1 < h3s.length) {
-        author = h3s[i + 1].text.trim();
-      } else if (text == 'artist' && i + 1 < h3s.length) {
-        artist = h3s[i + 1].text.trim();
-      } else if (text == 'status') {
-        final container = h3s[i].parent;
-        if (container != null) {
-          final val = container
-              .querySelectorAll('h3')
-              .firstWhere(
-                (e) => e != h3s[i],
-                orElse: () => document.createElement('h3'),
-              )
-              .text
-              .trim();
-          if (val.isNotEmpty) status = val;
-        }
+    final textNodes = document.querySelectorAll('div, span, p');
+    for (var node in textNodes) {
+      final text = node.text.trim().toLowerCase();
+      if (text == 'author' && node.nextElementSibling != null) {
+        author = node.nextElementSibling!.text.trim();
+      } else if (text == 'artist' && node.nextElementSibling != null) {
+        artist = node.nextElementSibling!.text.trim();
+      } else if (text == 'status' && node.nextElementSibling != null) {
+        status = node.nextElementSibling!.text.trim();
       }
     }
-    if (author == '_') author = 'Unknown';
-    if (artist == '_') artist = 'Unknown';
 
-    // Genres: bg-[#343434]
+    // Genres: tags with bg-white/5
     List<String> genres = [];
-    final buttons = document.querySelectorAll('button');
-    for (var btn in buttons) {
-      if (btn.classes.any((c) => c.contains('bg-[#343434]'))) {
-        genres.add(btn.text.trim());
+    final anchors = document.querySelectorAll('a');
+    for (var a in anchors) {
+      if (a.classes.any((c) => c.contains('bg-white/5')) || a.classes.any((c) => c.contains('rounded-lg'))) {
+        final g = a.text.trim();
+        if (g.length < 20 && !g.contains('Chapter') && !g.contains('Home')) {
+          genres.add(g);
+        }
       }
     }
 
@@ -280,39 +313,85 @@ class AsuraComicParser extends BaseParser {
       throw Exception('Login required to read this chapter');
     }
 
-    // The actual chapter page images are NOT in the rendered HTML <img> tags.
-    // They are embedded in the React Server Component (RSC) script payloads.
-    // Real chapter pages have numeric filenames like "00-optimized.webp",
-    // "01-optimized.webp", etc. Cover/thumbnail images use hash-based
-    // filenames like "01K6ZFV8K4PJJPY2RGMA9RBXZP-optimized.webp".
-
-    // Pattern: URLs with /conversions/{digits}-optimized.webp
-    final pagePattern = RegExp(
-      r'https?://gg\.asuracomic\.net/storage/media/\d+/conversions/(\d+)-optimized\.webp',
-    );
-
-    final Set<String> seen = {};
-    final List<_NumberedImage> pages = [];
-
-    // Search all script tags for RSC payloads
-    final scripts = document.querySelectorAll('script');
-    for (var script in scripts) {
-      final text = script.text;
-      if (!text.contains('asuracomic.net')) continue;
-
-      for (var match in pagePattern.allMatches(text)) {
-        final url = match.group(0)!;
-        final pageNum = int.parse(match.group(1)!);
-        if (seen.add(url)) {
-          pages.add(_NumberedImage(pageNum, url));
+    // Look for the Astro component that contains the chapter images
+    final List<String> imageUrls = [];
+    
+    // Find <astro-island> that likely contains the ChapterReader component
+    final islands = document.querySelectorAll('astro-island');
+    for (var island in islands) {
+      final propsString = island.attributes['props'] ?? '';
+      final componentUrl = island.attributes['component-url'] ?? '';
+      final componentExport = island.attributes['component-export'] ?? '';
+      
+      if (propsString.isNotEmpty && (componentUrl.contains('ChapterReader') || componentExport == 'ChapterReader')) {
+        try {
+          // Astro props are HTML entities encoded JSON
+          final decodedProps = _unescapeHtml(propsString);
+          final Map<String, dynamic> props = json.decode(decodedProps);
+          
+          // Current Astro structure: pages[1][index][1].url[1]
+          final pagesData = props['pages'];
+          if (pagesData is List && pagesData.length > 1) {
+            final pagesList = pagesData[1];
+            if (pagesList is List) {
+              for (var pageItem in pagesList) {
+                if (pageItem is List && pageItem.length > 1) {
+                  final pageObj = pageItem[1];
+                  if (pageObj is Map && pageObj.containsKey('url')) {
+                    final urlData = pageObj['url'];
+                    String? url;
+                    if (urlData is List && urlData.length > 1) {
+                      url = urlData[1].toString();
+                    } else if (urlData is String) {
+                      url = urlData;
+                    }
+                    if (url != null && url.isNotEmpty) imageUrls.add(url);
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Silent or print if debugging
         }
       }
     }
 
-    // Sort by page number to ensure correct reading order (00, 01, 02, ...)
-    pages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+    // Fallback 1: standard <img> tags
+    if (imageUrls.isEmpty) {
+      final imgs = document.querySelectorAll('img');
+      for (var img in imgs) {
+        final src = img.attributes['src'] ?? img.attributes['data-src'] ?? '';
+        if (src.contains('/asura-images/chapters/') || src.contains('gg.asuracomic.net/storage/media/')) {
+          imageUrls.add(src);
+        }
+      }
+    }
 
-    return pages.map((p) => p.url).toList();
+    // Fallback 2: Regex search in the whole body text/html
+    if (imageUrls.isEmpty) {
+      final bodyHtml = response.body;
+      final chapterImagePattern = RegExp(
+        r'https?://[^\s"''<>]+?/asura-images/chapters/[^\s"''<>]+?\.webp',
+        caseSensitive: false,
+      );
+      for (var match in chapterImagePattern.allMatches(bodyHtml)) {
+        imageUrls.add(match.group(0)!);
+      }
+    }
+
+    // Deduplicate and filter out empty
+    return imageUrls.where((url) => url.isNotEmpty).toSet().toList();
+  }
+
+  String _unescapeHtml(String input) {
+    return input
+        .replaceAll('&quot;', '"')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&#x2F;', '/');
   }
 }
 
