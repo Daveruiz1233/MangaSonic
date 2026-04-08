@@ -5,6 +5,7 @@ import 'package:manga_sonic/data/db/download_db.dart';
 import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/db/queue_db.dart';
 import 'package:manga_sonic/data/db/manga_cache_db.dart';
+import 'package:manga_sonic/data/db/settings_db.dart';
 import 'package:manga_sonic/utils/library_update_service.dart';
 import 'package:manga_sonic/utils/memory_safety_manager.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
@@ -62,6 +63,7 @@ class AppBootstrap {
       DownloadDB.init(),
       HistoryDB.init(),
       MangaCacheDB.init(),
+      SettingsDB.init(),
     ]);
 
     // QueueDB depends on DownloadDB being initialized

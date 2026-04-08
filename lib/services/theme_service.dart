@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:palette_generator/palette_generator.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ThemeService extends ChangeNotifier {
   static const String _boxName = 'themeBox';
@@ -9,6 +11,9 @@ class ThemeService extends ChangeNotifier {
   late Box _box;
   Color _primaryColor = Colors.deepPurple;
   Color _backgroundColor = const Color(0xFF121212); // Default dark grey/black
+  
+  // Cache to avoid refetching palette for same image
+  final Map<String, Color> _paletteCache = {};
 
   ThemeService() {
     _init();
@@ -38,6 +43,34 @@ class ThemeService extends ChangeNotifier {
   Color get primaryColor => _primaryColor;
   Color get backgroundColor => _backgroundColor;
 
+  Future<void> updateThemeFromImage(String imageUrl) async {
+    if (imageUrl.isEmpty) return;
+    
+    // Check cache
+    if (_paletteCache.containsKey(imageUrl)) {
+      setPrimaryColor(_paletteCache[imageUrl]!);
+      return;
+    }
+
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(
+        CachedNetworkImageProvider(imageUrl),
+        maximumColorCount: 20,
+      );
+
+      // Prefer vibrant colors for the "Aero" look
+      Color selectedColor = palette.vibrantColor?.color ?? 
+                           palette.lightVibrantColor?.color ??
+                           palette.dominantColor?.color ?? 
+                           Colors.deepPurple;
+
+      _paletteCache[imageUrl] = selectedColor;
+      setPrimaryColor(selectedColor);
+    } catch (e) {
+      debugPrint('Error generating palette: $e');
+    }
+  }
+
   Future<void> setPrimaryColor(Color color) async {
     _primaryColor = color;
     await _box.put(_colorKey, color.toARGB32());
@@ -60,7 +93,7 @@ class ThemeService extends ChangeNotifier {
         secondary: _primaryColor,
         surface: _backgroundColor,
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
