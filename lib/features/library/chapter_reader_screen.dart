@@ -163,8 +163,49 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       if (_visibilityWindowNotifier.value.start != newStart ||
           _visibilityWindowNotifier.value.end != newEnd) {
         _visibilityWindowNotifier.value = (start: newStart, end: newEnd);
+        // Trigger lazy resolution for the newly visible window
+        _resolveWindowedRatios();
       }
     }
+  }
+
+  /// Resolve aspect ratios only for pages near the current viewport
+  void _resolveWindowedRatios() {
+    final window = _visibilityWindowNotifier.value;
+    if (window.start == -1) return;
+
+    final allPages = [..._backwardPages.reversed, ..._forwardPages];
+    
+    // Resolve a small window: current visibility range + 3 pages ahead
+    final resolveStart = window.start;
+    final resolveEnd = (window.end + 3).clamp(0, allPages.length - 1);
+
+    for (int i = resolveStart; i <= resolveEnd; i++) {
+      final page = allPages[i];
+      if (page.isSeparator || page.aspectRatio != null) continue;
+      _resolveSinglePageRatio(page);
+    }
+  }
+
+  void _resolveSinglePageRatio(ReaderPage page) {
+    if (page.aspectRatio != null || page.isSeparator) return;
+
+    final provider = page.file != null
+        ? FileImage(page.file!)
+        : CachedNetworkImageProvider(page.url!) as ImageProvider;
+
+    final stream = provider.resolve(const ImageConfiguration());
+    late ImageStreamListener listener;
+    listener = ImageStreamListener((info, _) {
+      if (mounted) {
+        final aspect = info.image.width / info.image.height;
+        setState(() {
+          page.aspectRatio = aspect;
+        });
+      }
+      stream.removeListener(listener);
+    });
+    stream.addListener(listener);
   }
 
   @override
@@ -355,32 +396,12 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       });
     }
 
+
     _prefetchAdjacentChapters();
-    _startHeadlessResolution(pages);
+    // Removed: _startHeadlessResolution (we now use _resolveWindowedRatios lazily)
   }
 
-  void _startHeadlessResolution(List<ReaderPage> pages) {
-    for (final page in pages) {
-      if (page.aspectRatio != null || page.isSeparator) continue;
-
-      final provider = page.file != null
-          ? FileImage(page.file!)
-          : CachedNetworkImageProvider(page.url!) as ImageProvider;
-
-      final stream = provider.resolve(const ImageConfiguration());
-      late ImageStreamListener listener;
-      listener = ImageStreamListener((info, _) {
-        if (mounted) {
-          final aspect = info.image.width / info.image.height;
-          setState(() {
-            page.aspectRatio = aspect;
-          });
-        }
-        stream.removeListener(listener);
-      });
-      stream.addListener(listener);
-    }
-  }
+  // Removed _startHeadlessResolution in favor of windowed lazy resolution
 
   Future<List<ReaderPage>?> _fetchChapterPages(Chapter chapter) async {
     List<ReaderPage> pages = [];
@@ -480,7 +501,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           _forwardPages.addAll(pages);
           _isFetchingNext = false;
         });
-        _startHeadlessResolution(pages);
+        // Removed: _startHeadlessResolution
       } else if (mounted) {
         _isFetchingNext = false;
       }
@@ -512,7 +533,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
           _backwardPages.add(separator);
           _isFetchingPrev = false;
         });
-        _startHeadlessResolution(pages);
+        // Removed: _startHeadlessResolution
       } else if (mounted) {
         _isFetchingPrev = false;
       }
@@ -547,7 +568,7 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
                   child: CustomScrollView(
                     controller: _scrollController,
                     center: _centerKey,
-                    cacheExtent: 2500,
+                    cacheExtent: 1200, // Reduced from 2500 for low-RAM safety
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),

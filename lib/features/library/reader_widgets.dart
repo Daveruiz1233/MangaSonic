@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/features/library/reader_page.dart';
+import 'package:manga_sonic/utils/memory_safety_manager.dart';
 
 /// A memory-managed page widget that only renders images when near the viewport.
 class MemoryManagedPage extends StatelessWidget {
@@ -89,13 +90,17 @@ class _StableImageWidgetState extends State<StableImageWidget>
 
         if (aspect != null) {
           final height = width / aspect;
-          // Keep image alive if it was recently visible (within 5 seconds)
-          // This prevents viewport images from unloading during fast scrolls
+          // Keep image alive if it was recently visible
+          // In emergency mode, we are more aggressive with unloading
+          final keepAliveDuration = MemorySafetyManager().isUnderPressure
+              ? const Duration(seconds: 1)
+              : const Duration(seconds: 4);
+
           final shouldShow = widget.isNear ||
               (_hasBeenVisible &&
                   _firstVisibleTime != null &&
                   DateTime.now().difference(_firstVisibleTime!) <
-                      const Duration(seconds: 5));
+                      keepAliveDuration);
           return SizedBox(
             width: width,
             height: height,
@@ -123,11 +128,14 @@ class _StableImageWidgetState extends State<StableImageWidget>
       provider = CachedNetworkImageProvider(widget.page.url!);
     }
 
+    final mediaQuery = MediaQuery.of(context);
+    final cacheWidth = (mediaQuery.size.width * mediaQuery.devicePixelRatio).round();
+
     return Image(
-      image: provider,
+      image: ResizeImage(provider, width: cacheWidth),
       fit: BoxFit.contain,
       gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
+      filterQuality: FilterQuality.low, // Lower quality is faster to decode/render
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         return frame != null ? child : _loadingWidget();
       },
@@ -143,9 +151,13 @@ class _StableImageWidgetState extends State<StableImageWidget>
       provider = CachedNetworkImageProvider(widget.page.url!);
     }
 
+    final mediaQuery = MediaQuery.of(context);
+    final cacheWidth = (mediaQuery.size.width * mediaQuery.devicePixelRatio).round();
+
     return Image(
-      image: provider,
+      image: ResizeImage(provider, width: cacheWidth),
       fit: BoxFit.contain,
+      filterQuality: FilterQuality.low,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         if (frame != null && widget.page.aspectRatio == null) {
           _resolveSize(provider, availableWidth, context);

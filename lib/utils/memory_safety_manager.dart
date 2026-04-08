@@ -18,9 +18,9 @@ class MemorySafetyManager with WidgetsBindingObserver {
   int _activeReaderCount = 0;
   int get activeReaderCount => _activeReaderCount;
 
-  // Default limits (applied in _applyInitialLimits)
-  int _defaultMaxBytes = 100 * 1024 * 1024;
-  int _defaultMaxCount = 50;
+  // Default limits: 80MB / 40 images (conservative for 2GB RAM devices)
+  final int _defaultMaxBytes = 80 * 1024 * 1024;
+  final int _defaultMaxCount = 40;
 
   /// Initializes the manager and sets platform-specific image cache limits.
   void init() {
@@ -35,10 +35,10 @@ class MemorySafetyManager with WidgetsBindingObserver {
 
   void _applyInitialLimits() {
     if (Platform.isIOS) {
-      // 100MB max for image cache on iOS (prevents OOM on iPhone 6s Plus)
+      // Apply baseline limit (prevents OOM on iPhone 6s Plus)
       PaintingBinding.instance.imageCache.maximumSizeBytes = _defaultMaxBytes;
       PaintingBinding.instance.imageCache.maximumSize = _defaultMaxCount;
-      debugPrint('MemorySafetyManager: Applied iOS image cache limits (100MB / 50 images)');
+      debugPrint('MemorySafetyManager: Baseline limits applied (${_defaultMaxBytes ~/ 1048576}MB / $_defaultMaxCount imgs)');
     }
   }
 
@@ -46,45 +46,30 @@ class MemorySafetyManager with WidgetsBindingObserver {
   void didHaveMemoryPressure() {
     debugPrint('MemorySafetyManager: SYSTEM MEMORY PRESSURE DETECTED');
     _isUnderPressure = true;
-    // If there's an active reader open, avoid clearing live images immediately
-    // to prevent visual glitches while scrolling. Instead, notify listeners
-    // and reduce cache limits to discourage further decoding.
-    if (_activeReaderCount > 0) {
-      debugPrint('MemorySafetyManager: Reader active — deferring clearLiveImages()');
-      // Reduce limits temporarily to prevent more allocations
-      PaintingBinding.instance.imageCache.maximumSizeBytes = (_defaultMaxBytes / 2).toInt();
-      final int reducedCount = (_defaultMaxCount ~/ 2).clamp(10, _defaultMaxCount);
-      PaintingBinding.instance.imageCache.maximumSize = reducedCount;
-    } else {
-      // No reader visible — perform normal aggressive eviction
-      PaintingBinding.instance.imageCache.clear();
-      PaintingBinding.instance.imageCache.clearLiveImages();
-    }
+    
+    // Perform aggressive clear immediately
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    debugPrint('MemorySafetyManager: Aggressively cleared all image caches');
 
     // 2. Notify listeners (Reader) to shrink their windows
     _lowMemoryStreamController.add(true);
     
-    // Reset pressure flag after a delay to allow window to expand again later if needed
+    // Reset pressure flag after a delay
     Timer(const Duration(minutes: 5), () {
       _isUnderPressure = false;
       _lowMemoryStreamController.add(false);
-      // Restore default limits when pressure subsides (if no reader active)
-      if (_activeReaderCount == 0) {
-        PaintingBinding.instance.imageCache.maximumSizeBytes = _defaultMaxBytes;
-        PaintingBinding.instance.imageCache.maximumSize = _defaultMaxCount;
-      }
     });
   }
 
-  /// Call when a reader screen becomes visible. While one or more readers are
-  /// active we avoid clearing live images to prevent flicker.
+  /// Call when a reader screen becomes visible.
   void registerReaderVisible() {
     _activeReaderCount++;
     if (_activeReaderCount == 1) {
-      // When reader opens, increase cache allowance to reduce thrashing.
-      PaintingBinding.instance.imageCache.maximumSizeBytes = (_defaultMaxBytes * 2);
-      PaintingBinding.instance.imageCache.maximumSize = (_defaultMaxCount * 2);
-      debugPrint('MemorySafetyManager: Reader registered — increased cache limits');
+      // When reader opens, slightly increase cache allowance but STAY CONSERVATIVE.
+      PaintingBinding.instance.imageCache.maximumSizeBytes = (_defaultMaxBytes * 1.5).toInt();
+      PaintingBinding.instance.imageCache.maximumSize = (_defaultMaxCount * 1.5).toInt();
+      debugPrint('MemorySafetyManager: Reader registered — slightly raised limits');
     }
   }
 
@@ -92,17 +77,14 @@ class MemorySafetyManager with WidgetsBindingObserver {
   void unregisterReaderVisible() {
     if (_activeReaderCount > 0) _activeReaderCount--;
     if (_activeReaderCount == 0) {
-      // Restore defaults
+      // Restore baseline
       PaintingBinding.instance.imageCache.maximumSizeBytes = _defaultMaxBytes;
       PaintingBinding.instance.imageCache.maximumSize = _defaultMaxCount;
-      debugPrint('MemorySafetyManager: Reader unregistered — restored cache limits');
+      debugPrint('MemorySafetyManager: Reader unregistered — restored baseline results');
 
-      // If we previously deferred eviction due to pressure, perform it now
-      if (_isUnderPressure) {
-        debugPrint('MemorySafetyManager: Performing deferred eviction now that reader closed');
-        PaintingBinding.instance.imageCache.clear();
-        PaintingBinding.instance.imageCache.clearLiveImages();
-      }
+      // Always clear cache when closing a reader to free memory for the rest of the app
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
     }
   }
 }
