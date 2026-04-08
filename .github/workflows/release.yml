@@ -46,6 +46,12 @@ jobs:
             - Transparent adaptive AppBars across all screens
             - Consistent source tagging and migration sheet styling
 
+            ### 🛠️ Memory & Performance (Bug Fixes)
+            - **MemorySafetyManager**: Implemented aggressive cache management for low-RAM devices.
+            - **Smart Downsampling**: Hardware-accelerated image scaling via `ResizeImage` to reduce VRAM.
+            - **Lazy Resolution**: Windowed aspect ratio resolution to prevent OOM crashes on load.
+            - **Adaptive Keep-Alive**: Memory-aware image retention responding to system pressure.
+
             ### Features & Stability
             - Background scanning for automatic "NEW" chapter tagging
             - Intelligent grid deduplication (Hero Card vs Grid)
