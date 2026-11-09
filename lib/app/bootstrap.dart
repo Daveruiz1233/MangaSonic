@@ -10,17 +10,23 @@ import 'package:manga_sonic/utils/library_update_service.dart';
 import 'package:manga_sonic/utils/memory_safety_manager.dart';
 import 'package:manga_sonic/utils/download_manager.dart';
 import 'package:manga_sonic/services/theme_service.dart';
+import 'package:manga_sonic/services/auth_service.dart';
+import 'package:manga_sonic/services/sync_service.dart';
 
 /// Holds initialized services for the app
 class AppServices {
   final ThemeService themeService;
   final DownloadManager downloadManager;
   final LibraryUpdateService updateService;
+  final AuthService authService;
+  final SyncService syncService;
 
   const AppServices({
     required this.themeService,
     required this.downloadManager,
     required this.updateService,
+    required this.authService,
+    required this.syncService,
   });
 }
 
@@ -35,6 +41,14 @@ class AppBootstrap {
 
     // Initialize databases in parallel where possible
     await _initDatabases();
+
+    // Initialize Supabase and auth
+    await AuthService.initialize();
+    final authService = AuthService.instance;
+
+    // Initialize sync service
+    await SyncService.initialize();
+    final syncService = SyncService.instance;
 
     // Initialize services
     await _initServices();
@@ -52,6 +66,8 @@ class AppBootstrap {
       themeService: themeService,
       downloadManager: downloadManager,
       updateService: updateService,
+      authService: authService,
+      syncService: syncService,
     );
   }
 

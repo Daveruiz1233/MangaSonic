@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import '../../services/sync_service.dart';
 import '../models/models.dart';
 
 class HistoryDB {
@@ -36,6 +37,7 @@ class HistoryDB {
       lastReadTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
     await box.put(chapterUrl, status.toMap());
+    _queueSyncProgress(status);
   }
 
   static Future<void> saveProgress(
@@ -57,6 +59,7 @@ class HistoryDB {
       lastReadTimestamp: DateTime.now().millisecondsSinceEpoch,
     );
     await box.put(chapterUrl, status.toMap());
+    _queueSyncProgress(status);
   }
 
   static int getLastPage(String chapterUrl) {
@@ -78,5 +81,16 @@ class HistoryDB {
     final data = box.get(chapterUrl);
     if (data == null) return null;
     return ChapterStatus.fromMap(data).lastReadTimestamp;
+  }
+
+  static void _queueSyncProgress(ChapterStatus status) {
+    try {
+      final syncService = SyncService.instance;
+      if (syncService.pendingProgressChangesCount >= 0) {
+        syncService.queueProgressChange(status);
+      }
+    } catch (_) {
+      // SyncService not initialized yet, ignore
+    }
   }
 }

@@ -285,11 +285,37 @@ class _SiteScreenState extends State<SiteScreen> {
           ),
           SliverPadding(
             padding: const EdgeInsets.all(8.0),
-            sliver: _mangas.isEmpty && _isLoading
-                ? const SliverToBoxAdapter(
+            sliver: _mangas.isEmpty
+                ? SliverToBoxAdapter(
                     child: SizedBox(
-                      height: 200,
-                      child: Center(child: CircularProgressIndicator()),
+                      height: 250,
+                      child: Center(
+                        child: _isLoading
+                            ? const CircularProgressIndicator()
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.menu_book_outlined,
+                                    size: 48,
+                                    color: Colors.white24,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _isSearching
+                                        ? 'No manga found for "$_searchQuery"'
+                                        : 'No manga loaded. Tap to retry.',
+                                    style: const TextStyle(color: Colors.white54),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: _fetchData,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                      ),
                     ),
                   )
                 : SliverGrid(

@@ -26,13 +26,39 @@ abstract class BaseParser {
   // Shared HTTP Client with generic User-Agent
   final http.Client client = http.Client();
 
+  bool _isCloudflareBlock(http.Response response) {
+    // Check status codes that definitely indicate Cloudflare block
+    if (response.statusCode == 403 || response.statusCode == 429) {
+      return true;
+    }
+    // Check for 503 with Cloudflare content
+    if (response.statusCode == 503 &&
+        (response.body.contains('cloudflare') ||
+            response.body.contains('Just a moment') ||
+            response.body.contains('challenges.cloudflare.com'))) {
+      return true;
+    }
+    // Cloudflare often returns 200 with challenge page - check body content
+    if (response.statusCode == 200 &&
+        (response.body.contains('Just a moment') ||
+            response.body.contains('challenges.cloudflare.com') ||
+            response.body.contains('cf-browser-verification') ||
+            response.body.contains('cf-challenge-running') ||
+            response.body.contains('id="cf-challenge"') ||
+            response.body.contains('data-ray="') ||
+            (response.body.contains('cloudflare') && response.body.contains('challenge')))) {
+      return true;
+    }
+    return false;
+  }
+
   Future<http.Response> getRequest(String url, {bool isRetry = false}) async {
     final response = await client.get(
       Uri.parse(url),
-      headers: {...CloudflareInterceptor.headers},
+      headers: CloudflareInterceptor.headersForUrl(url),
     );
 
-    if (response.statusCode == 403 || response.statusCode == 429) {
+    if (_isCloudflareBlock(response)) {
       if (!isRetry) {
         await CloudflareInterceptor.bypass(url);
         return await getRequest(url, isRetry: true);
@@ -54,13 +80,13 @@ abstract class BaseParser {
     final response = await client.post(
       Uri.parse(url),
       headers: {
-        ...CloudflareInterceptor.headers,
+        ...CloudflareInterceptor.headersForUrl(url),
         if (headers != null) ...headers,
       },
       body: body,
     );
 
-    if (response.statusCode == 403 || response.statusCode == 429) {
+    if (_isCloudflareBlock(response)) {
       if (!isRetry) {
         await CloudflareInterceptor.bypass(url);
         return await postRequest(url, body: body, headers: headers, isRetry: true);

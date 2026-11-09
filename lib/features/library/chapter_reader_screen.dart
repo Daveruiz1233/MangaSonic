@@ -7,6 +7,7 @@ import 'package:manga_sonic/data/db/history_db.dart';
 import 'package:manga_sonic/data/models/models.dart';
 import 'package:manga_sonic/utils/parser_factory.dart';
 import 'package:manga_sonic/utils/memory_safety_manager.dart';
+import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
 import 'package:manga_sonic/features/library/reader_page.dart';
 import 'package:manga_sonic/features/library/reader_widgets.dart';
 
@@ -190,9 +191,17 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
   void _resolveSinglePageRatio(ReaderPage page) {
     if (page.aspectRatio != null || page.isSeparator) return;
 
-    final provider = page.file != null
-        ? FileImage(page.file!)
-        : CachedNetworkImageProvider(page.url!) as ImageProvider;
+    final imageUrl = page.url!;
+      final referer = 'https://asurascans.com/';
+      final provider = page.file != null
+          ? FileImage(page.file!)
+          : CachedNetworkImageProvider(
+              imageUrl,
+              headers: {
+                ...CloudflareInterceptor.headersForUrl(imageUrl),
+                'Referer': referer,
+              },
+            ) as ImageProvider;
 
     final stream = provider.resolve(const ImageConfiguration());
     late ImageStreamListener listener;
@@ -446,7 +455,13 @@ class _ChapterReaderScreenState extends State<ChapterReaderScreen> {
       final url = pages[i].url;
       if (url != null) {
         try {
-          CachedNetworkImageProvider(url).resolve(ImageConfiguration.empty);
+          CachedNetworkImageProvider(
+            url,
+            headers: {
+              ...CloudflareInterceptor.headersForUrl(url),
+              'Referer': 'https://asurascans.com/',
+            },
+          ).resolve(ImageConfiguration.empty);
         } catch (_) {}
       }
     }

@@ -30,11 +30,30 @@ android {
         versionName = flutter.versionName
     }
 
+    // Release signing reads from environment variables (set as GitHub Secrets in CI).
+    // Falls back to debug signing when no keystore is provided (local dev / test builds).
+    val hasReleaseSigning =
+        System.getenv("RELEASE_STORE_FILE") != null &&
+        System.getenv("RELEASE_KEY_ALIAS") != null &&
+        System.getenv("RELEASE_STORE_PASSWORD") != null &&
+        System.getenv("RELEASE_KEY_PASSWORD") != null
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(System.getenv("RELEASE_STORE_FILE")!!)
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")!!
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")!!
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")!!
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (hasReleaseSigning) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
         }
     }
 }

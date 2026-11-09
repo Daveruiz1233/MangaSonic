@@ -10,6 +10,8 @@ void main() async {
       themeService: services.themeService,
       downloadManager: services.downloadManager,
       updateService: services.updateService,
+      authService: services.authService,
+      syncService: services.syncService,
     ),
   );
 }

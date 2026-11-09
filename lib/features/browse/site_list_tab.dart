@@ -18,14 +18,14 @@ class _SiteListTabState extends State<SiteListTab> {
     },
     {
       'name': 'AsuraComic',
-      'url': 'https://asuracomic.net/',
-      'logoUrl': 'https://asuracomic.net/images/logo.webp',
+      'url': 'https://asurascans.com/',
+      'logoUrl': 'https://asurascans.com/images/logo.webp',
     },
     {
       'name': 'ManhuaPlus',
-      'url': 'https://manhuaplus.com/',
+      'url': 'https://manhuaplus.top/',
       'logoUrl':
-          'https://manhuaplus.com/wp-content/uploads/2017/10/logo-1-1.png',
+          'https://www.google.com/s2/favicons?domain=manhuaplus.top&sz=128',
     },
   ];
 

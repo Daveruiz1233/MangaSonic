@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:manga_sonic/features/library/reader_page.dart';
 import 'package:manga_sonic/utils/memory_safety_manager.dart';
+import 'package:manga_sonic/utils/cloudflare_interceptor.dart';
 
 /// A memory-managed page widget that only renders images when near the viewport.
 class MemoryManagedPage extends StatelessWidget {
@@ -125,7 +126,15 @@ class _StableImageWidgetState extends State<StableImageWidget>
     if (widget.page.file != null) {
       provider = FileImage(widget.page.file!);
     } else {
-      provider = CachedNetworkImageProvider(widget.page.url!);
+      final imageUrl = widget.page.url!;
+      final referer = 'https://asurascans.com/';
+      provider = CachedNetworkImageProvider(
+        imageUrl,
+        headers: {
+          ...CloudflareInterceptor.headersForUrl(imageUrl),
+          'Referer': referer,
+        },
+      );
     }
 
     final mediaQuery = MediaQuery.of(context);
@@ -148,7 +157,15 @@ class _StableImageWidgetState extends State<StableImageWidget>
     if (widget.page.file != null) {
       provider = FileImage(widget.page.file!);
     } else {
-      provider = CachedNetworkImageProvider(widget.page.url!);
+      final imageUrl = widget.page.url!;
+      final referer = 'https://asurascans.com/';
+      provider = CachedNetworkImageProvider(
+        imageUrl,
+        headers: {
+          ...CloudflareInterceptor.headersForUrl(imageUrl),
+          'Referer': referer,
+        },
+      );
     }
 
     final mediaQuery = MediaQuery.of(context);
